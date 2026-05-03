@@ -2,8 +2,15 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Historial Médico - Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Historial">
+<meta name="theme-color" content="#0B0F19">
+<title>Historial Médico</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -424,11 +431,23 @@ function toggleCitasPanel() {
 }
 
 function parseCitaDate(str) {
-  const s = String(str).trim();
-  // Intenta dd/mm/yyyy o dd/mm/yyyy HH:mm
-  const m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
   if (str instanceof Date) return str;
+  const s = String(str).trim();
+  // Formato principal: dd-mm-yy HH:MM ... (ej: 15-05-26 11:01 Revisión...)
+  const m1 = s.match(/^(\d{1,2})-(\d{1,2})-(\d{2})\s+(\d{1,2}):(\d{2})/);
+  if (m1) {
+    const year = 2000 + parseInt(m1[3]);
+    return new Date(year, parseInt(m1[2]) - 1, parseInt(m1[1]), parseInt(m1[4]), parseInt(m1[5]));
+  }
+  // Formato dd-mm-yy sin hora
+  const m1b = s.match(/^(\d{1,2})-(\d{1,2})-(\d{2})/);
+  if (m1b) return new Date(2000 + parseInt(m1b[3]), parseInt(m1b[2]) - 1, parseInt(m1b[1]));
+  // Formato dd/mm/yyyy
+  const m2 = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m2) return new Date(parseInt(m2[3]), parseInt(m2[2]) - 1, parseInt(m2[1]));
+  // Formato dd/mm/yy
+  const m3 = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2})/);
+  if (m3) return new Date(2000 + parseInt(m3[3]), parseInt(m3[2]) - 1, parseInt(m3[1]));
   return null;
 }
 
@@ -457,9 +476,11 @@ function renderCitasPendientes() {
     });
   });
 
-  // Ordenar por fecha más próxima
+  // Ordenar por fecha más próxima primero (ascendente)
   citas.sort((a, b) => {
     if (a.dateObj && b.dateObj) return a.dateObj - b.dateObj;
+    if (a.dateObj) return -1;
+    if (b.dateObj) return 1;
     return 0;
   });
 
@@ -489,6 +510,14 @@ function renderCitasPendientes() {
   });
 
   document.getElementById('citasPanel').innerHTML = H;
+}
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
 }
 </script>
 </body>
