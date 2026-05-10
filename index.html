@@ -35,14 +35,43 @@
     border-bottom: 1px solid var(--border);
     padding: 20px 40px 0;
   }
-  .header-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; }
-  .header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .header-top {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    padding-bottom: 16px;
+    gap: 14px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  .header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; white-space: nowrap; flex-shrink: 0; }
   .header h1 span { color: var(--accent); }
-  .header-info { display: flex; gap: 20px; align-items: center; font-size: 13px; color: var(--text2); }
+
+  /* Botón Cargar Excel — pequeño, verde, junto al título */
+  .btn-cargar {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: #16a34a; color: #fff;
+    border: none; border-radius: 7px;
+    padding: 5px 11px; font-family: 'DM Sans', sans-serif;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    white-space: nowrap; flex-shrink: 0;
+    transition: background 0.2s;
+  }
+  .btn-cargar:hover { background: #15803d; }
+
+  .header-info {
+    display: flex; gap: 12px; align-items: center;
+    font-size: 13px; color: var(--text2);
+    flex: 1; justify-content: flex-end;
+    min-width: 0; overflow: hidden;
+  }
   .header-info .tag {
     background: var(--surface2); padding: 5px 12px; border-radius: 20px;
-    border: 1px solid var(--border); font-family: 'Space Mono', monospace; font-size: 11px;
+    border: 1px solid var(--border); font-family: 'Space Mono', monospace;
+    font-size: 11px; white-space: nowrap; flex-shrink: 0;
   }
+  #poliza { white-space: nowrap; font-size: 12px; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
+
   .tabs { display: flex; gap: 2px; padding-bottom: 0; overflow-x: auto; }
   .tab {
     padding: 10px 20px; font-size: 13px; font-weight: 500; cursor: pointer;
@@ -88,22 +117,10 @@
   tbody tr:nth-child(odd) { background: rgba(59,130,246,0.03); }
   tbody tr:nth-child(even) { background: transparent; }
   tbody tr:hover { background: var(--surface2); }
-
-  /* EXPANDABLE CELLS */
   .cell-short { font-size: 13px; line-height: 1.4; max-width: 220px; }
-  .cell-expand {
-    font-size: 13px; line-height: 1.4; max-width: 220px;
-    cursor: pointer; position: relative;
-  }
+  .cell-expand { font-size: 13px; line-height: 1.4; max-width: 220px; cursor: pointer; position: relative; }
   .cell-expand:hover { color: var(--accent); }
-  .cell-expand::after {
-    content: ' ▸';
-    font-size: 10px;
-    color: var(--accent);
-    opacity: 0.6;
-  }
-
-  /* MODAL */
+  .cell-expand::after { content: ' ▸'; font-size: 10px; color: var(--accent); opacity: 0.6; }
   .modal-overlay {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
     z-index: 1000; justify-content: center; align-items: center; padding: 20px;
@@ -115,16 +132,11 @@
   }
   .modal-card h4 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 12px; }
   .modal-card p { font-size: 14px; line-height: 1.8; color: var(--text); white-space: pre-wrap; }
-  .modal-close {
-    position: absolute; top: 16px; right: 20px; background: none; border: none;
-    color: var(--text3); font-size: 22px; cursor: pointer;
-  }
+  .modal-close { position: absolute; top: 16px; right: 20px; background: none; border: none; color: var(--text3); font-size: 22px; cursor: pointer; }
   .modal-close:hover { color: var(--text); }
-
   .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
   .badge-blue { background: rgba(59,130,246,0.15); color: #60A5FA; }
   .badge-amber { background: rgba(245,158,11,0.15); color: #F59E0B; }
-
   .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
   .summary-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -135,19 +147,18 @@
   .summary-card .count { font-family: 'Space Mono', monospace; font-size: 32px; font-weight: 700; color: var(--accent); margin-bottom: 12px; }
   .summary-card .detail { font-size: 13px; color: var(--text2); line-height: 1.6; }
   .summary-card .detail strong { color: var(--text); }
-
   .empty-state { text-align: center; padding: 60px 20px; color: var(--text3); }
   .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
-
-  /* CITAS PENDIENTES */
   .btn-citas {
-    display: none; /* se muestra solo cuando hay citas */
+    display: none;
     align-items: center; gap: 8px;
     background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
     color: #fff; border: none; border-radius: 10px;
     padding: 8px 18px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
-    cursor: pointer; position: relative; transition: all 0.25s; box-shadow: 0 2px 12px rgba(220,38,38,0.35);
+    cursor: pointer; position: relative; transition: all 0.25s;
+    box-shadow: 0 2px 12px rgba(220,38,38,0.35);
     animation: pulse-glow 2.5s ease-in-out infinite;
+    flex-shrink: 0; white-space: nowrap;
   }
   .btn-citas:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(220,38,38,0.5); }
   .btn-citas .citas-count {
@@ -159,15 +170,11 @@
     0%, 100% { box-shadow: 0 2px 12px rgba(220,38,38,0.35); }
     50% { box-shadow: 0 2px 20px rgba(220,38,38,0.55); }
   }
-
-  .citas-panel {
-    display: none; margin-bottom: 28px;
-  }
+  .citas-panel { display: none; margin-bottom: 28px; }
   .citas-panel.active { display: block; }
   .cita-card {
     background: var(--surface); border: 1px solid var(--border); border-left: 4px solid #DC2626;
-    border-radius: var(--radius); padding: 20px 24px; margin-bottom: 12px;
-    transition: all 0.2s;
+    border-radius: var(--radius); padding: 20px 24px; margin-bottom: 12px; transition: all 0.2s;
   }
   .cita-card:hover { border-left-color: #EF4444; background: var(--surface2); }
   .cita-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
@@ -183,12 +190,14 @@
   .citas-title-row .line { flex: 1; height: 1px; background: var(--border); }
 
   @media (max-width: 768px) {
-    .header { padding: 16px 20px 0; }
-    .header-top { flex-direction: column; gap: 10px; }
+    .header { padding: 12px 16px 0; }
+    .header-top { gap: 10px; }
+    .header h1 { font-size: 17px; }
     .main { padding: 16px 20px; }
     .stats-row { grid-template-columns: 1fr 1fr; }
     .upload-card { padding: 40px 24px; }
     .summary-grid { grid-template-columns: 1fr; }
+    #poliza { display: none; }
   }
 </style>
 </head>
@@ -197,14 +206,18 @@
 <div class="header">
   <div class="header-top">
     <h1>🏥 Historial <span>Médico</span></h1>
+
+    <label for="fileInput">
+      <span class="btn-cargar">📂 Cargar Excel</span>
+    </label>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+
     <div class="header-info">
       <button class="btn-citas" id="btnCitas" onclick="toggleCitasPanel()">
         🗓️ Citas Pendientes <span class="citas-count" id="citasCount">0</span>
       </button>
       <span id="poliza"></span>
       <span class="tag" id="lastUpdate">Sin datos</span>
-      <label for="fileInput" style="cursor:pointer;color:var(--accent);font-weight:500;">📂 Cargar Excel</label>
-      <input type="file" id="fileInput" accept=".xlsx,.xls">
     </div>
   </div>
   <div class="tabs" id="tabsBar"></div>
@@ -235,11 +248,8 @@
 const DATA = { specialties: [], analytics: [], poliza: '' };
 const SKIP = ['Instrucciones', 'Analíticas'];
 const WORD_LIMIT = 10;
-
-// Store full texts for modal access
 const CELL_STORE = [];
 
-// ── IndexedDB: guardar y recuperar Excel ──────────────────────────
 const DB_NAME = 'HistorialMedico', DB_STORE = 'excel', DB_KEY = 'ultimo';
 
 function abrirDB() {
@@ -271,7 +281,6 @@ function cargarExcelGuardado() {
   }).catch(() => {});
 }
 
-// Al cargar nuevo Excel: parsear, guardar y mostrar
 document.getElementById('fileInput').addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -286,17 +295,13 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
   reader.readAsArrayBuffer(file);
 });
 
-// Al iniciar la app: cargar el Excel guardado automáticamente
 window.addEventListener('load', cargarExcelGuardado);
 
-// Modal - event delegation for expandable cells
 document.addEventListener('click', function(e) {
   const cell = e.target.closest('.cell-expand');
   if (cell) {
     const idx = parseInt(cell.dataset.idx);
-    if (CELL_STORE[idx]) {
-      openModal(CELL_STORE[idx].col, CELL_STORE[idx].text);
-    }
+    if (CELL_STORE[idx]) openModal(CELL_STORE[idx].col, CELL_STORE[idx].text);
   }
 });
 document.getElementById('modal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
@@ -351,10 +356,7 @@ function cellHTML(text, colName) {
   const clean = fmt(text).replace(/\n/g, ' ').trim();
   if (!clean) return '<span class="cell-short">—</span>';
   const words = clean.split(/\s+/);
-  if (words.length <= WORD_LIMIT) {
-    return '<span class="cell-short">' + escapeHTML(clean) + '</span>';
-  }
-  // Store full text and return truncated with data index
+  if (words.length <= WORD_LIMIT) return '<span class="cell-short">' + escapeHTML(clean) + '</span>';
   const idx = CELL_STORE.length;
   CELL_STORE.push({ col: colName, text: fmt(text).replace(/\n/g, '\n').trim() });
   const short = escapeHTML(words.slice(0, WORD_LIMIT).join(' ')) + '…';
@@ -383,7 +385,6 @@ function renderDashboard() {
   let H = '';
   const totalRecs = DATA.specialties.reduce((s, sp) => s + sp.records.length, 0);
 
-  // RESUMEN
   H += '<div class="panel active" id="panel_resumen">';
   H += '<div class="stats-row">';
   H += '<div class="stat-card"><div class="stat-bar" style="background:var(--accent)"></div><div class="stat-label">Total consultas</div><div class="stat-value">' + totalRecs + '</div><div class="stat-sub">Todos los especialistas</div></div>';
@@ -405,7 +406,6 @@ function renderDashboard() {
   });
   H += '</div></div>';
 
-  // ESPECIALIDADES
   DATA.specialties.forEach(s => {
     const id = 'spec_' + s.name.replace(/\s/g, '_');
     const hdrs = Object.keys(s.records[0]);
@@ -422,7 +422,6 @@ function renderDashboard() {
     H += '</tbody></table></div></div></div>';
   });
 
-  // ANALÍTICAS
   H += '<div class="panel" id="panel_analiticas">';
   if (DATA.analytics.length > 0) {
     const ah = Object.keys(DATA.analytics[0]);
@@ -444,11 +443,9 @@ function renderDashboard() {
 
   document.getElementById('panelsContainer').innerHTML = H;
 
-  // Tab switching
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', function() { activateTab(this.dataset.target); });
   });
-  // Summary card click -> tab
   document.querySelectorAll('.summary-card[data-spectab]').forEach(card => {
     card.addEventListener('click', function() { activateTab(this.dataset.spectab); });
   });
@@ -459,7 +456,6 @@ function renderDashboard() {
 function activateTab(target) {
   document.querySelectorAll('.tab').forEach(t => { t.classList.toggle('active', t.dataset.target === target); });
   document.querySelectorAll('.panel').forEach(p => { p.classList.toggle('active', p.id === 'panel_' + target); });
-  // Cerrar panel citas al cambiar de tab
   document.getElementById('citasPanel').classList.remove('active');
 }
 
@@ -471,19 +467,12 @@ function toggleCitasPanel() {
 function parseCitaDate(str) {
   if (str instanceof Date) return str;
   const s = String(str).trim();
-  // Formato principal: dd-mm-yy HH:MM ... (ej: 15-05-26 11:01 Revisión...)
   const m1 = s.match(/^(\d{1,2})-(\d{1,2})-(\d{2})\s+(\d{1,2}):(\d{2})/);
-  if (m1) {
-    const year = 2000 + parseInt(m1[3]);
-    return new Date(year, parseInt(m1[2]) - 1, parseInt(m1[1]), parseInt(m1[4]), parseInt(m1[5]));
-  }
-  // Formato dd-mm-yy sin hora
+  if (m1) return new Date(2000 + parseInt(m1[3]), parseInt(m1[2]) - 1, parseInt(m1[1]), parseInt(m1[4]), parseInt(m1[5]));
   const m1b = s.match(/^(\d{1,2})-(\d{1,2})-(\d{2})/);
   if (m1b) return new Date(2000 + parseInt(m1b[3]), parseInt(m1b[2]) - 1, parseInt(m1b[1]));
-  // Formato dd/mm/yyyy
   const m2 = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (m2) return new Date(parseInt(m2[3]), parseInt(m2[2]) - 1, parseInt(m2[1]));
-  // Formato dd/mm/yy
   const m3 = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2})/);
   if (m3) return new Date(2000 + parseInt(m3[3]), parseInt(m3[2]) - 1, parseInt(m3[1]));
   return null;
@@ -491,53 +480,34 @@ function parseCitaDate(str) {
 
 function renderCitasPendientes() {
   const citas = [];
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-
+  const now = new Date(); now.setHours(0,0,0,0);
   DATA.specialties.forEach(s => {
     s.records.forEach(r => {
       const proxCita = fmt(r['Próxima Cita']);
       if (!proxCita || proxCita === '—') return;
       const citaDate = parseCitaDate(proxCita);
-      // Incluir si la fecha es hoy o futura, o si no se pudo parsear (mostrar igualmente)
       if (citaDate && citaDate < now) return;
       citas.push({
-        especialidad: s.name,
-        fecha: proxCita,
-        dateObj: citaDate,
-        medico: fmt(r['Médico']),
-        centro: fmt(r['Centro']),
-        motivo: fmt(r['Motivo Consulta']),
-        tipo: fmt(r['Tipo Exploración']),
+        especialidad: s.name, fecha: proxCita, dateObj: citaDate,
+        medico: fmt(r['Médico']), centro: fmt(r['Centro']),
+        motivo: fmt(r['Motivo Consulta']), tipo: fmt(r['Tipo Exploración']),
         observaciones: fmt(r['Observaciones'])
       });
     });
   });
-
-  // Ordenar por fecha más próxima primero (ascendente)
   citas.sort((a, b) => {
     if (a.dateObj && b.dateObj) return a.dateObj - b.dateObj;
-    if (a.dateObj) return -1;
-    if (b.dateObj) return 1;
-    return 0;
+    if (a.dateObj) return -1; if (b.dateObj) return 1; return 0;
   });
-
   const btn = document.getElementById('btnCitas');
   const countEl = document.getElementById('citasCount');
-  if (citas.length > 0) {
-    btn.style.display = 'flex';
-    countEl.textContent = citas.length;
-  } else {
-    btn.style.display = 'none';
-  }
-
+  if (citas.length > 0) { btn.style.display = 'flex'; countEl.textContent = citas.length; }
+  else { btn.style.display = 'none'; }
   let H = '<div class="citas-title-row"><h3>🗓️ Citas Pendientes</h3><div class="line"></div></div>';
   citas.forEach(c => {
-    H += '<div class="cita-card">';
-    H += '<div class="cita-card-header">';
+    H += '<div class="cita-card"><div class="cita-card-header">';
     H += '<h4>' + escapeHTML(c.especialidad) + '</h4>';
-    H += '<span class="cita-fecha">' + escapeHTML(c.fecha) + '</span>';
-    H += '</div>';
+    H += '<span class="cita-fecha">' + escapeHTML(c.fecha) + '</span></div>';
     H += '<div class="cita-detail">';
     if (c.tipo) H += '<strong>Exploración:</strong> ' + escapeHTML(c.tipo) + '<br>';
     if (c.centro) H += '<strong>Centro:</strong> ' + escapeHTML(c.centro) + '<br>';
@@ -546,7 +516,6 @@ function renderCitasPendientes() {
     if (c.observaciones) H += '<strong>Observaciones:</strong> ' + escapeHTML(c.observaciones);
     H += '</div></div>';
   });
-
   document.getElementById('citasPanel').innerHTML = H;
 }
 </script>
