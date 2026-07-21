@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Historial">
+<meta name="theme-color" content="#0B0F19">
+<title>Historial Médico</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B0F19;
+    --surface: #131825;
+    --surface2: #1A2035;
+    --border: #243049;
+    --accent: #3B82F6;
+    --accent2: #06D6A0;
+    --accent3: #F59E0B;
+    --accent4: #EF4444;
+    --text: #E8ECF4;
+    --text2: #8892A8;
+    --text3: #5A6580;
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  /* ===== BARRA FIJA SUPERIOR ===== */
+  .topbar {
+    position: sticky; top: 0; z-index: 500;
+    background: linear-gradient(135deg, #131825 0%, #1a2845 100%);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+  }
+  .btn-back {
+    flex-shrink: 0; background: var(--surface2); border: 1px solid var(--border);
+    color: #F5C518; width: 52px; height: 46px; border-radius: 12px;
+    font-size: 30px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-weight: 800; padding-bottom: 3px; transition: background .15s, transform .1s;
+    user-select: none; -webkit-user-select: none;
+  }
+  .btn-back:hover { background: #223052; }
+  .btn-back:active { transform: scale(0.9); background: #223052; }
+  .btn-burger {
+    margin-left: auto; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); width: 44px; height: 42px; border-radius: 10px;
+    font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .btn-burger.open { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .header-info {
+    display: flex; gap: 8px; align-items: center;
+    font-size: 12px; color: var(--text2); flex-shrink: 1; min-width: 0; overflow: hidden;
+  }
+  .header-info .tag {
+    background: var(--surface2); padding: 2px 5px; border-radius: 20px;
+    border: 1px solid var(--border); font-family: 'Space Mono', monospace;
+    font-size: 9px; white-space: nowrap; flex-shrink: 0;
+  }
+  #poliza { display: none; }
+
+  /* ===== MENÚ DESPLEGABLE ===== */
+  .menu {
+    position: sticky; top: 66px; z-index: 490;
+    max-height: 0; overflow: hidden; background: var(--surface);
+    border-bottom: 1px solid transparent; transition: max-height .32s ease, border-color .2s;
+  }
+  .menu.open { max-height: 680px; border-bottom-color: var(--border); box-shadow: 0 12px 30px rgba(0,0,0,.4); }
+  .menu-inner { padding: 8px; }
+  .menu-item {
+    display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 10px;
+    cursor: pointer; font-size: 15px; font-weight: 500; color: var(--text); transition: background .15s;
+  }
+  .menu-item:hover { background: var(--surface2); }
+  .menu-item .ico { font-size: 18px; width: 24px; text-align: center; }
+  .menu-item .soon {
+    margin-left: auto; font-size: 10px; background: rgba(124,58,237,.2); color: #A78BFA;
+    padding: 2px 8px; border-radius: 10px; font-weight: 700; text-transform: uppercase;
+  }
+  .menu-item .chev { margin-left: auto; transition: transform .25s; color: var(--text3); }
+  .menu-item.exp.open .chev { transform: rotate(180deg); }
+  .submenu { max-height: 0; overflow: hidden; transition: max-height .3s ease; background: var(--bg); border-radius: 10px; margin: 0 8px; }
+  .submenu.open { max-height: 560px; margin: 4px 8px 8px; overflow-y: auto; }
+  .sub-item {
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px 12px 30px; cursor: pointer;
+    font-size: 14px; color: var(--text2); border-bottom: 1px solid var(--border); transition: .15s;
+  }
+  .sub-item:last-child { border-bottom: none; }
+  .sub-item:hover { background: var(--surface2); color: var(--text); }
+  .sub-item .badge2 { margin-left: auto; font-family: 'Space Mono', monospace; font-size: 11px; color: var(--text3); }
+  .menu-sep { height: 1px; background: var(--border); margin: 6px 12px; }
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 480; display: none; }
+  .scrim.show { display: block; }
+  .upload-zone { display: flex; justify-content: center; align-items: center; min-height: 70vh; padding: 40px; }
+  .upload-card {
+    background: var(--surface); border: 2px dashed var(--border); border-radius: 20px;
+    padding: 60px 80px; text-align: center; cursor: pointer; transition: all 0.3s; max-width: 520px;
+  }
+  .upload-card:hover { border-color: var(--accent); background: var(--surface2); transform: translateY(-2px); }
+  .upload-icon { font-size: 56px; margin-bottom: 20px; display: block; }
+  .upload-card h2 { font-size: 20px; margin-bottom: 8px; font-weight: 500; }
+  .upload-card p { color: var(--text2); font-size: 14px; line-height: 1.6; }
+  input[type="file"] { display: none; }
+  .main { display: none; padding: 20px 16px 60px; }
+  .main.active { display: block; }
+  .view { display: none; }
+  .view.active { display: block; }
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px 24px; position: relative; overflow: hidden;
+  }
+  .stat-bar { position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+  .stat-label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .stat-value { font-family: 'Space Mono', monospace; font-size: 26px; font-weight: 700; }
+  .stat-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .table-container { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .table-header { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .table-header h3 { font-size: 16px; font-weight: 600; }
+  .table-scroll { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 160px); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: var(--surface2); padding: 11px 14px; text-align: left; font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2);
+    white-space: nowrap; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1;
+  }
+  tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; line-height: 1.5; }
+  tbody tr:nth-child(odd) { background: rgba(59,130,246,0.03); }
+  tbody tr:nth-child(even) { background: transparent; }
+  tbody tr:hover { background: var(--surface2); }
+  .cell-short { font-size: 13px; line-height: 1.4; max-width: 220px; }
+  .cell-expand { font-size: 13px; line-height: 1.4; max-width: 220px; cursor: pointer; position: relative; }
+  .cell-expand:hover { color: var(--accent); }
+  .cell-expand::after { content: ' ▸'; font-size: 10px; color: var(--accent); opacity: 0.6; }
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    z-index: 1000; justify-content: center; align-items: center; padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 28px 32px; max-width: 600px; width: 100%; max-height: 80vh; overflow-y: auto; position: relative;
+  }
+  .modal-card h4 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 12px; }
+  .modal-card p { font-size: 14px; line-height: 1.8; color: var(--text); white-space: pre-wrap; }
+  .modal-close { position: absolute; top: 16px; right: 20px; background: none; border: none; color: var(--text3); font-size: 22px; cursor: pointer; }
+  .modal-close:hover { color: var(--text); }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge-blue { background: rgba(59,130,246,0.15); color: #60A5FA; }
+  .badge-amber { background: rgba(245,158,11,0.15); color: #F59E0B; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+  .summary-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 24px; cursor: pointer; transition: all 0.2s;
+  }
+  .summary-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .summary-card h3 { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+  .summary-card .count { font-family: 'Space Mono', monospace; font-size: 32px; font-weight: 700; color: var(--accent); margin-bottom: 12px; }
+  .summary-card .detail { font-size: 13px; color: var(--text2); line-height: 1.6; }
+  .summary-card .detail strong { color: var(--text); }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text3); }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+  .btn-citas {
+    display: flex;
+    align-items: center; justify-content: center; gap: 8px;
+    background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+    color: #fff; border: none; border-radius: 10px;
+    padding: 9px 16px; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 600;
+    cursor: pointer; position: relative; transition: all 0.25s;
+    box-shadow: 0 2px 12px rgba(220,38,38,0.35);
+    flex: 1 1 auto; min-width: 0; white-space: nowrap;
+  }
+  .btn-citas:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(220,38,38,0.5); }
+  .btn-citas .citas-count {
+    background: #fff; color: #DC2626; font-family: 'Space Mono', monospace;
+    font-size: 12px; font-weight: 700; border-radius: 50%; min-width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 2px 12px rgba(220,38,38,0.35); }
+    50% { box-shadow: 0 2px 20px rgba(220,38,38,0.55); }
+  }
+  .citas-panel { margin-bottom: 28px; }
+  .view-title { font-size: 20px; font-weight: 700; margin-bottom: 16px; }
+  .ana-search-wrap {
+    display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+    border-bottom: 1px solid var(--border); background: var(--surface);
+  }
+  .ana-search-ico { font-size: 16px; color: var(--text2); flex-shrink: 0; }
+  .ana-search {
+    flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 9px 12px; outline: none;
+  }
+  .ana-search:focus { border-color: var(--accent3); box-shadow: 0 0 0 3px rgba(245,158,11,.15); }
+  .ana-search::placeholder { color: var(--text3); }
+  .ana-search-clear {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text2);
+    border-radius: 8px; width: 36px; height: 36px; cursor: pointer; font-size: 13px; flex-shrink: 0;
+  }
+  .ana-search-clear:hover { background: #223052; color: var(--text); }
+  .ana-count { padding: 8px 16px 0; font-size: 12px; color: var(--text3); font-family: 'Space Mono', monospace; }
+
+  /* ===== Medicación ===== */
+  .med-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .med-seg { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .med-seg button { background: transparent; border: none; color: var(--text2); font-family: 'DM Sans'; font-size: 12px; font-weight: 600; padding: 8px 13px; cursor: pointer; }
+  .med-seg button.on { background: var(--accent); color: #fff; }
+  table#medTable { min-width: 1000px; }
+  #medTable thead .filter-row th { padding: 6px 10px 10px; background: var(--surface2); position: sticky; top: 34px; z-index: 1; }
+  #medTable thead .filter-row input, #medTable thead .filter-row select {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: 'DM Sans'; font-size: 11px; padding: 4px 6px; outline: none;
+  }
+  #medTable thead .filter-row input:focus, #medTable thead .filter-row select:focus { border-color: var(--accent); }
+  .med-name { font-weight: 700; color: var(--text); }
+  .med-pa { font-size: 11px; color: var(--text3); }
+  .med-pill { display: inline-block; font-family: 'Space Mono'; font-size: 11px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; white-space: nowrap; }
+  .esp-tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: rgba(6,214,160,.13); color: #5EEAD4; white-space: nowrap; }
+  .med-chk { width: 20px; height: 20px; cursor: pointer; accent-color: var(--accent2); }
+  .med-fin { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: 'Space Mono'; font-size: 11px; padding: 4px 6px; width: 120px; outline: none; }
+  .med-fin:focus { border-color: var(--accent4); }
+  #medTable tbody tr.off { opacity: .45; }
+  .med-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text3); margin-top: 12px; }
+  .med-legend span { display: flex; align-items: center; gap: 6px; }
+  .med-dot { width: 10px; height: 10px; border-radius: 3px; }
+  .row-sup td:first-child { border-left: 3px solid var(--accent3); }
+  .row-med td:first-child { border-left: 3px solid #7C3AED; }
+
+  /* ===== Buscador global ===== */
+  .search-wrap { margin-bottom: 18px; }
+  .search-row { display: flex; align-items: center; gap: 12px; }
+  .search-box { flex: 1; display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2px 6px 2px 14px; max-width: 520px; }
+  .search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
+  .search-box input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-family: 'DM Sans'; font-size: 15px; padding: 11px 0; }
+  .search-box input::placeholder { color: var(--text3); }
+  .search-ico { font-size: 17px; color: var(--text2); }
+  .search-clear { background: var(--surface2); border: none; color: var(--text2); cursor: pointer; border-radius: 8px; width: 34px; height: 34px; font-size: 13px; }
+  .search-counter { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--accent2); white-space: nowrap; flex-shrink: 0; }
+  .search-hint { font-size: 12px; color: var(--text3); margin: 8px 2px 0; }
+  .res-count { font-size: 13px; color: var(--text2); margin: 4px 2px 10px; }
+  .res-table { width: 100%; min-width: 640px; }
+  .res-table thead th { position: sticky; top: 0; }
+  .res-trow { cursor: pointer; transition: background .15s; }
+  .res-trow:hover { background: var(--surface2); }
+  .res-trow td { vertical-align: top; }
+  .res-fecha { font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; color: var(--accent3); white-space: nowrap; }
+  .res-badge { font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 12px; text-transform: uppercase; letter-spacing: .5px; display: inline-block; margin-bottom: 4px; }
+  .b-inf { background: rgba(59,130,246,.15); color: #60A5FA; }
+  .b-ana { background: rgba(245,158,11,.15); color: #F59E0B; }
+  .b-med { background: rgba(124,58,237,.18); color: #A78BFA; }
+  .res-esp { font-size: 12px; color: var(--text); font-weight: 600; }
+  .res-table td { padding: 9px 12px; }
+  .res-medico { font-size: 12px; color: var(--text2); max-width: 160px; }
+  .res-valor { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--text); white-space: nowrap; }
+  .res-valor mark { background: rgba(6,214,160,.25); color: #6EE7C4; padding: 0 2px; border-radius: 3px; font-weight: 600; }
+  tr.row-highlight { animation: rowFlash 2.6s ease; }
+  @keyframes rowFlash {
+    0%, 100% { background: transparent; }
+    15%, 60% { background: rgba(6,214,160,.22); box-shadow: inset 3px 0 0 var(--accent2); }
+  }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(140px); background: #0EA5E9; color: #fff; padding: 14px 22px; border-radius: 12px; font-size: 14px; font-weight: 600; box-shadow: 0 8px 30px rgba(14,165,233,.5); transition: transform .35s; z-index: 2000; max-width: 90vw; text-align: center; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .cita-card {
+    background: var(--surface); border: 1px solid var(--border); border-left: 4px solid #DC2626;
+    border-radius: var(--radius); margin-bottom: 12px; overflow: hidden;
+  }
+  .cita-card:hover { border-left-color: #EF4444; }
+  .cita-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; cursor: pointer; gap: 8px; transition: background 0.2s;
+  }
+  .cita-card-header:hover { background: var(--surface2); }
+  .cita-card-header-left { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+  .cita-header-row1 { display: flex; align-items: center; gap: 10px; }
+  .cita-card-header h4 { font-size: 15px; font-weight: 600; color: var(--text); white-space: nowrap; flex-shrink: 0; }
+  .cita-nota {
+    flex: 1; min-width: 0; background: #F0F4FA; border: 1px solid #CBD5E1;
+    border-radius: 8px; padding: 5px 10px; font-family: 'DM Sans', sans-serif;
+    font-size: 13px; color: #1E293B; outline: none; height: 30px; box-sizing: border-box;
+  }
+  .cita-nota:focus { border-color: #DC2626; box-shadow: 0 0 0 2px rgba(220,38,38,0.15); background: #fff; }
+  .cita-nota::placeholder { color: #94A3B8; font-style: italic; }
+  .cita-fecha { font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; color: #F87171; }
+  .cita-toggle {
+    font-size: 11px; color: var(--text3); transition: transform 0.25s; flex-shrink: 0;
+    background: var(--surface2); border-radius: 50%; width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cita-card.open .cita-toggle { transform: rotate(180deg); }
+  .cita-detail {
+    font-size: 13px; color: var(--text2); line-height: 1.7; max-height: 0;
+    overflow: hidden; transition: max-height 0.35s ease, padding 0.25s ease;
+    padding: 0 16px; border-top: 0px solid var(--border);
+  }
+  .cita-card.open .cita-detail { max-height: 600px; padding: 12px 16px 16px; border-top: 1px solid var(--border); }
+  .cita-detail strong { color: var(--text); }
+  .citas-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .citas-title-row h3 { font-size: 18px; font-weight: 700; color: #F87171; }
+  .citas-title-row .line { flex: 1; height: 1px; background: var(--border); }
+
+  @media (max-width: 768px) {
+    .main { padding: 16px 14px 60px; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+    .upload-card { padding: 40px 24px; }
+    .summary-grid { grid-template-columns: 1fr; }
+    .header-info { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="btn-back" id="btnBack" title="Volver (mantener pulsado: inicio)">◀</button>
+  <button class="btn-citas" id="btnCitas" onclick="goInicio()">
+    🗓️ Citas <span class="citas-count" id="citasCount">0</span>
+  </button>
+  <input type="file" id="fileInput" accept=".xlsx,.xls">
+  <div class="header-info">
+    <span id="poliza"></span>
+    <span class="tag" id="lastUpdate">Sin datos</span>
+  </div>
+  <button class="btn-burger" id="burger" onclick="toggleMenu()">☰</button>
+</div>
+
+<div class="menu" id="menu">
+  <div class="menu-inner" id="menuInner"></div>
+</div>
+<div class="scrim" id="scrim" onclick="closeMenu()"></div>
+
+<div class="upload-zone" id="uploadZone">
+  <label class="upload-card" for="fileInput">
+    <span class="upload-icon">📋</span>
+    <h2>Carga tu Historial Médico</h2>
+    <p>Selecciona tu archivo <strong>Médico DD-M-AA.xlsx</strong><br>para visualizar toda tu información médica.</p>
+  </label>
+</div>
+
+<div class="main" id="mainContent">
+  <div class="view active" id="view_inicio">
+    <div class="citas-panel" id="citasPanel"></div>
+  </div>
+  <div class="view" id="view_secciones">
+    <div id="panelsContainer"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal-card">
+    <button class="modal-close" id="modalClose">✕</button>
+    <h4 id="modalTitle"></h4>
+    <p id="modalBody"></p>
+  </div>
+</div>
+
+<script>
+const DATA = { specialties: [], analytics: [], poliza: '', sanitas: null, medicacion: [] };
+const SKIP = ['Instrucciones', 'Analíticas', 'Datos Sanitas', 'Medicación Actual'];
+const WORD_LIMIT = 10;
+const CELL_STORE = [];
+const REF_MAP = [];        // ref -> {obj, panel}
+const REF_LOOKUP = new Map(); // obj -> ref
+function registrarRef(obj, panel) {
+  if (REF_LOOKUP.has(obj)) return REF_LOOKUP.get(obj);
+  const ref = REF_MAP.length;
+  REF_MAP.push({ obj, panel });
+  REF_LOOKUP.set(obj, ref);
+  return ref;
+}
+
+const DB_NAME = 'HistorialMedico', DB_STORE = 'excel', DB_KEY = 'ultimo';
+
+function abrirDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(DB_STORE);
+    req.onsuccess = e => res(e.target.result);
+    req.onerror = () => rej();
+  });
+}
+function guardarExcel(buffer) {
+  abrirDB().then(db => {
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).put(buffer, DB_KEY);
+  }).catch(() => {});
+}
+function cargarExcelGuardado() {
+  abrirDB().then(db => {
+    const tx = db.transaction(DB_STORE, 'readonly');
+    const req = tx.objectStore(DB_STORE).get(DB_KEY);
+    req.onsuccess = e => {
+      if (e.target.result) {
+        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+        parseWorkbook(wb);
+        renderDashboard();
+        const d2 = new Date(); document.getElementById('lastUpdate').textContent = d2.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'}) + ' 💾';
+      }
+    };
+  }).catch(() => {});
+}
+
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const buffer = e.target.result;
+    guardarExcel(buffer.slice(0));
+    const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+    parseWorkbook(wb);
+    renderDashboard();
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+window.addEventListener('load', cargarExcelGuardado);
+
+document.addEventListener('click', function(e) {
+  const cell = e.target.closest('.cell-expand');
+  if (cell) {
+    const idx = parseInt(cell.dataset.idx);
+    if (CELL_STORE[idx]) openModal(CELL_STORE[idx].col, CELL_STORE[idx].text);
+  }
+});
+document.getElementById('modal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+document.getElementById('modalClose').addEventListener('click', closeModal);
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
+
+function openModal(title, text) {
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalBody').textContent = text;
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+function parseWorkbook(wb) {
+  DATA.specialties = []; DATA.analytics = []; DATA.poliza = ''; DATA.sanitas = null; DATA.medicacion = [];
+  CELL_STORE.length = 0;
+  wb.SheetNames.forEach(name => {
+    const ws = wb.Sheets[name];
+    const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    if (json.length < 2) return;
+    const row1 = String(json[0][0] || '');
+    const pm = row1.match(/Póliza:\s*([\d]+)/i);
+    if (pm && !DATA.poliza) DATA.poliza = pm[1];
+    if (name === 'Datos Sanitas') {
+      DATA.sanitas = { rows: json };
+      return;
+    }
+    if (name === 'Medicación Actual') {
+      const h = json[1];
+      for (let i = 2; i < json.length; i++) {
+        if (!json[i][0]) continue;
+        const m = {}; h.forEach((k, idx) => { m[k] = json[i][idx] || ''; });
+        DATA.medicacion.push(m);
+      }
+      return;
+    }
+    if (name === 'Analíticas') {
+      if (json.length > 2) {
+        const h = json[1];
+        for (let i = 2; i < json.length; i++) {
+          if (!json[i][0]) continue;
+          const a = {}; h.forEach((k, idx) => { a[k] = json[i][idx] || ''; });
+          DATA.analytics.push(a);
+        }
+      }
+    } else if (!SKIP.includes(name)) {
+      const h = json[1]; const recs = [];
+      for (let i = 2; i < json.length; i++) {
+        if (!json[i][0]) continue;
+        const r = {}; h.forEach((k, idx) => { r[k] = json[i][idx] || ''; });
+        recs.push(r);
+      }
+      if (recs.length > 0) DATA.specialties.push({ name, records: recs });
+    }
+  });
+}
+
+function fmt(v) {
+  if (!v) return '';
+  if (v instanceof Date) return v.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return String(v);
+}
+
+function cellHTML(text, colName) {
+  const clean = fmt(text).replace(/\n/g, ' ').trim();
+  if (!clean) return '<span class="cell-short">—</span>';
+  const words = clean.split(/\s+/);
+  if (words.length <= WORD_LIMIT) return '<span class="cell-short">' + escapeHTML(clean) + '</span>';
+  const idx = CELL_STORE.length;
+  CELL_STORE.push({ col: colName, text: fmt(text).replace(/\n/g, '\n').trim() });
+  const short = escapeHTML(words.slice(0, WORD_LIMIT).join(' ')) + '…';
+  return '<span class="cell-expand" data-idx="' + idx + '">' + short + '</span>';
+}
+
+function escapeHTML(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function renderDashboard() {
+  document.getElementById('uploadZone').style.display = 'none';
+  document.getElementById('mainContent').classList.add('active');
+  REF_MAP.length = 0; REF_LOOKUP.clear(); GLOBAL_DOCS.length = 0;
+  const d = new Date(); document.getElementById('lastUpdate').textContent = d.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'});
+  if (DATA.poliza) document.getElementById('poliza').textContent = 'Póliza: ' + DATA.poliza;
+
+  // ===== Construir menú hamburguesa =====
+  let menuH = '';
+  menuH += '<div class="menu-item" onclick="activateTab(\'buscador\')"><span class="ico">🔎</span> Buscar</div>';
+  menuH += '<div class="menu-item" onclick="activateTab(\'medicacion\')"><span class="ico">💊</span> Medicación</div>';
+  menuH += '<div class="menu-item" onclick="activateTab(\'resumen\')"><span class="ico">📊</span> Resumen</div>';
+  if (DATA.sanitas) menuH += '<div class="menu-item" onclick="activateTab(\'sanitas\')"><span class="ico">🏥</span> Datos Sanitas</div>';
+  menuH += '<div class="menu-item" onclick="activateTab(\'analiticas\')"><span class="ico">🔬</span> Analíticas</div>';
+  menuH += '<div class="menu-item" onclick="exportarDatos()"><span class="ico">⬇️</span> Exportar datos</div>';
+  menuH += '<div class="menu-item" onclick="cargarExcelDesdeMenu()"><span class="ico">📂</span> Cargar Excel</div>';
+  menuH += '<div class="menu-item" onclick="descargarExcel()"><span class="ico">📗</span> Descargar Excel</div>';
+  menuH += '<div class="menu-sep"></div>';
+  menuH += '<div class="menu-item exp" id="expEsp" onclick="toggleSub()"><span class="ico">🏷️</span> Especialidades <span class="chev">▼</span></div>';
+  menuH += '<div class="submenu" id="submenu">';
+  DATA.specialties.forEach(s => {
+    menuH += '<div class="sub-item" onclick="activateTab(\'spec_' + s.name.replace(/\s/g, '_') + '\')">' + escapeHTML(s.name) + ' <span class="badge2">' + s.records.length + '</span></div>';
+  });
+  menuH += '</div>';
+  document.getElementById('menuInner').innerHTML = menuH;
+
+  let H = '';
+  const totalRecs = DATA.specialties.reduce((s, sp) => s + sp.records.length, 0);
+
+  H += '<div class="panel active" id="panel_resumen">';
+  H += '<div class="stats-row">';
+  H += '<div class="stat-card"><div class="stat-bar" style="background:var(--accent)"></div><div class="stat-label">Total consultas</div><div class="stat-value">' + totalRecs + '</div><div class="stat-sub">Todos los especialistas</div></div>';
+  H += '<div class="stat-card"><div class="stat-bar" style="background:var(--accent2)"></div><div class="stat-label">Especialidades</div><div class="stat-value">' + DATA.specialties.length + '</div><div class="stat-sub">' + (DATA.specialties.map(s => s.name).join(', ') || 'Ninguna') + '</div></div>';
+  H += '<div class="stat-card"><div class="stat-bar" style="background:var(--accent3)"></div><div class="stat-label">Analíticas</div><div class="stat-value">' + DATA.analytics.length + '</div><div class="stat-sub">' + (DATA.analytics.length > 0 ? 'valores registrados' : 'Sin registros aún') + '</div></div>';
+  H += '</div>';
+
+  H += '<div class="summary-grid">';
+  DATA.specialties.forEach(s => {
+    const last = ordenarPorFechaDesc(s.records, 'Fecha')[0];
+    const doctors = [...new Set(s.records.map(r => fmt(r['Médico'])).filter(Boolean))];
+    const diags = [...new Set(s.records.map(r => fmt(r['Diagnóstico']).replace(/\n/g, ', ')).filter(Boolean))];
+    H += '<div class="summary-card" data-spectab="spec_' + s.name.replace(/\s/g, '_') + '">';
+    H += '<h3>' + escapeHTML(s.name) + '</h3>';
+    H += '<div class="count">' + s.records.length + '</div>';
+    H += '<div class="detail"><strong>Última visita:</strong> ' + fmt(last['Fecha']) + '<br>';
+    H += '<strong>Médico' + (doctors.length > 1 ? 's' : '') + ':</strong> ' + escapeHTML(doctors.join(', ')) + '<br>';
+    H += '<strong>Diagnóstico' + (diags.length > 1 ? 's' : '') + ':</strong> ' + escapeHTML(diags.join(' | ')) + '</div></div>';
+  });
+  H += '</div></div>';
+
+  DATA.specialties.forEach(s => {
+    const id = 'spec_' + s.name.replace(/\s/g, '_');
+    const hdrs = Object.keys(s.records[0]);
+    const rowsDesc = ordenarPorFechaDesc(s.records, 'Fecha');
+    H += '<div class="panel" id="panel_' + id + '"><div class="table-container">';
+    H += '<div class="table-header"><h3>' + escapeHTML(s.name) + '</h3><span class="badge badge-blue">' + s.records.length + ' registro' + (s.records.length !== 1 ? 's' : '') + '</span></div>';
+    H += '<div class="table-scroll"><table><thead><tr>';
+    hdrs.forEach(h => { H += '<th>' + escapeHTML(h) + '</th>'; });
+    H += '</tr></thead><tbody>';
+    rowsDesc.forEach(r => {
+      const ref = registrarRef(r, 'panel_' + id);
+      H += '<tr id="rowref_' + ref + '">';
+      hdrs.forEach(h => { H += '<td>' + cellHTML(r[h], h) + '</td>'; });
+      H += '</tr>';
+    });
+    H += '</tbody></table></div></div></div>';
+  });
+
+  H += '<div class="panel" id="panel_analiticas">';
+  if (DATA.analytics.length > 0) {
+    const ah = Object.keys(DATA.analytics[0]);
+    const anDesc = ordenarPorFechaDesc(DATA.analytics, 'Fecha');
+    H += '<div class="table-container"><div class="table-header"><h3>Analíticas y valores</h3>';
+    H += '<span class="badge badge-amber" id="anaBadge">' + DATA.analytics.length + ' registros</span></div>';
+    H += '<div class="ana-search-wrap"><span class="ana-search-ico">🔎</span>';
+    H += '<input id="anaSearch" class="ana-search" type="text" placeholder="Filtrar analíticas: parámetro, tipo, fecha, valor…" oninput="filtrarAnaliticas(this.value)">';
+    H += '<button class="ana-search-clear" onclick="document.getElementById(\'anaSearch\').value=\'\';filtrarAnaliticas(\'\')">✕</button></div>';
+    H += '<div class="ana-count" id="anaCount"></div>';
+    H += '<div class="table-scroll"><table id="anaTable"><thead><tr>';
+    ah.forEach(h => { H += '<th>' + escapeHTML(h) + '</th>'; });
+    H += '</tr></thead><tbody>';
+    anDesc.forEach(a => {
+      const ref = registrarRef(a, 'panel_analiticas');
+      H += '<tr id="rowref_' + ref + '">';
+      ah.forEach(h => { H += '<td>' + cellHTML(a[h], h) + '</td>'; });
+      H += '</tr>';
+    });
+    H += '</tbody></table></div></div>';
+  } else {
+    H += '<div class="empty-state"><div class="icon">📊</div><p>No hay analíticas registradas aún.<br>Cuando subas informes con valores analíticos, aquí verás su evolución.</p></div>';
+  }
+  H += '</div>';
+
+  // ===== Panel Datos Sanitas =====
+  if (DATA.sanitas) {
+    H += '<div class="panel" id="panel_sanitas"><div class="table-container">';
+    H += '<div class="table-header"><h3>🏥 Datos Sanitas</h3></div>';
+    H += '<div class="table-scroll"><table><tbody>';
+    DATA.sanitas.rows.forEach((row, ri) => {
+      if (!row || row.every(c => c === '' || c == null)) return;
+      H += '<tr>';
+      row.forEach(cell => {
+        const val = fmt(cell);
+        if (ri === 0) H += '<th style="text-transform:none;font-size:13px;color:var(--text)">' + escapeHTML(val) + '</th>';
+        else H += '<td>' + (val ? escapeHTML(val) : '—') + '</td>';
+      });
+      H += '</tr>';
+    });
+    H += '</tbody></table></div></div></div>';
+  }
+
+  // ===== Panel Medicación =====
+  H += '<div class="panel" id="panel_medicacion">' + buildMedicacionHTML() + '</div>';
+
+  // ===== Panel Buscador global =====
+  H += '<div class="panel" id="panel_buscador">'
+     + '<div class="search-wrap"><div class="search-row"><div class="search-box"><span class="search-ico">🔎</span>'
+     + '<input id="globalSearch" type="text" placeholder="Buscar: colesterol, Adiro, Torres…" oninput="buscarGlobal(this.value)">'
+     + '<button class="search-clear" onclick="document.getElementById(\'globalSearch\').value=\'\';buscarGlobal(\'\')">✕</button></div>'
+     + '<div class="search-counter" id="searchCounter">—</div></div>'
+     + '<div class="search-hint">Busca en especialidades, analíticas y medicación. Pulsa un resultado para ir a su ficha.</div></div>'
+     + '<div id="globalResults"></div></div>';
+
+  document.getElementById('panelsContainer').innerHTML = H;
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', function() { activateTab(this.dataset.target); });
+  });
+  document.querySelectorAll('.summary-card[data-spectab]').forEach(card => {
+    card.addEventListener('click', function() { activateTab(this.dataset.spectab); });
+  });
+
+  renderCitasPendientes();
+}
+
+// ===== MEDICACIÓN =====
+const MED_KEYS = {}; // cache de estado por clave
+function medKey(m) { return 'med__' + norm(m['Fármaco']) + '__' + norm(m['Dosis']); }
+function norm(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
+
+function medEstado(m) {
+  // localStorage manda sobre el Excel
+  const k = medKey(m);
+  let tom = String(m['¿Tomando?'] || '').toLowerCase();
+  let tomando = (tom === 'sí' || tom === 'si' || tom === 'true' || tom === '1');
+  let fin = fmt(m['Fecha Fin']) || '';
+  try {
+    const ls = localStorage.getItem(k);
+    if (ls) { const o = JSON.parse(ls); if ('tomando' in o) tomando = o.tomando; if ('fin' in o) fin = o.fin; }
+  } catch (e) {}
+  return { tomando, fin };
+}
+function setMedEstado(m, tomando, fin) {
+  try { localStorage.setItem(medKey(m), JSON.stringify({ tomando, fin })); } catch (e) {}
+}
+
+function buildMedicacionHTML() {
+  if (!DATA.medicacion || DATA.medicacion.length === 0) {
+    return '<div class="empty-state"><div class="icon">💊</div><p>No hay hoja «Medicación Actual» en el Excel.<br>Cuando la incluya, aquí verás tu medicación y suplementos.</p></div>';
+  }
+  let h = '';
+  h += '<div class="med-toolbar"><div class="med-seg" id="medSeg">'
+     + '<button class="on" onclick="setMedSeg(this,\'todas\')">Todas</button>'
+     + '<button onclick="setMedSeg(this,\'tomando\')">Tomando ahora</button>'
+     + '<button onclick="setMedSeg(this,\'sup\')">Solo suplementos</button>'
+     + '</div></div>';
+  h += '<div class="table-container"><div class="table-scroll"><table id="medTable"><thead><tr>';
+  const cols = ['Fármaco','Dosis','Posología','Toma','Indicación','Fecha Prescripción','Prescriptor','Especialidad','¿Tomando?','Fecha Fin'];
+  cols.forEach(c => { h += '<th>' + c + '</th>'; });
+  h += '</tr><tr class="filter-row">'
+     + '<th><input placeholder="filtrar…" oninput="medColFilter(0,this.value)"></th>'
+     + '<th></th><th></th>'
+     + '<th><input placeholder="toma…" oninput="medColFilter(3,this.value)"></th>'
+     + '<th><input placeholder="filtrar…" oninput="medColFilter(4,this.value)"></th>'
+     + '<th></th>'
+     + '<th><input placeholder="médico…" oninput="medColFilter(6,this.value)"></th>'
+     + '<th><input placeholder="especialidad…" oninput="medColFilter(7,this.value)"></th>'
+     + '<th><select onchange="medColFilter(8,this.value)"><option value="">Todo</option><option value="si">Sí</option><option value="no">No</option></select></th>'
+     + '<th></th></tr></thead><tbody id="medBody"></tbody></table></div></div>';
+  h += '<div class="med-legend"><span><span class="med-dot" style="background:#7C3AED"></span> Medicamento</span>'
+     + '<span><span class="med-dot" style="background:#F59E0B"></span> Suplemento</span>'
+     + '<span>· Marca/desmarca «¿Tomando?» y pon «Fecha fin»; se guardan y se incluyen al Exportar datos.</span></div>';
+  return h;
+}
+let MED_SEG = 'todas';
+const MED_COLF = {};
+function setMedSeg(btn, v) { document.querySelectorAll('#medSeg button').forEach(b => b.classList.remove('on')); btn.classList.add('on'); MED_SEG = v; renderMedBody(); }
+function medColFilter(i, v) { MED_COLF[i] = norm(v); renderMedBody(); }
+function renderMedBody() {
+  const tb = document.getElementById('medBody'); if (!tb) return;
+  let html = '';
+  DATA.medicacion.forEach((m, i) => {
+    const est = medEstado(m);
+    const esSup = norm(m['Tipo']).includes('suplement') || norm(m['Especialidad']).includes('suplement');
+    if (MED_SEG === 'tomando' && !est.tomando) return;
+    if (MED_SEG === 'sup' && !esSup) return;
+    const cells = [m['Fármaco'] + ' ' + m['Principio Activo'], m['Dosis'], m['Posología'], m['Toma'], m['Indicación'], m['Fecha Prescripción'], m['Prescriptor'], m['Especialidad'], (est.tomando ? 'si' : 'no'), est.fin];
+    for (const [ci, fv] of Object.entries(MED_COLF)) { if (fv && !norm(cells[ci]).includes(fv)) return; }
+    html += '<tr class="' + (esSup ? 'row-sup' : 'row-med') + (est.tomando ? '' : ' off') + '">'
+      + '<td><div class="med-name">' + escapeHTML(fmt(m['Fármaco'])) + '</div><div class="med-pa">' + escapeHTML(fmt(m['Principio Activo'])) + '</div></td>'
+      + '<td><span class="med-pill">' + escapeHTML(fmt(m['Dosis'])) + '</span></td>'
+      + '<td><span class="med-pill">' + escapeHTML(fmt(m['Posología'])) + '</span></td>'
+      + '<td>' + escapeHTML(fmt(m['Toma'])) + '</td>'
+      + '<td>' + escapeHTML(fmt(m['Indicación'])) + '</td>'
+      + '<td>' + escapeHTML(fmt(m['Fecha Prescripción'])) + '</td>'
+      + '<td>' + escapeHTML(fmt(m['Prescriptor'])) + '</td>'
+      + '<td><span class="esp-tag">' + escapeHTML(fmt(m['Especialidad'])) + '</span></td>'
+      + '<td style="text-align:center"><input type="checkbox" class="med-chk" ' + (est.tomando ? 'checked' : '') + ' onchange="medToggle(' + i + ',this.checked)"></td>'
+      + '<td><input type="date" class="med-fin" value="' + escapeHTML(est.fin) + '" onchange="medSetFin(' + i + ',this.value)"></td>'
+      + '</tr>';
+  });
+  tb.innerHTML = html || '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:24px">Sin resultados con los filtros aplicados.</td></tr>';
+}
+function medToggle(i, v) { const m = DATA.medicacion[i]; const e = medEstado(m); setMedEstado(m, v, e.fin); renderMedBody(); }
+function medSetFin(i, v) { const m = DATA.medicacion[i]; const e = medEstado(m); setMedEstado(m, v ? false : e.tomando, v); renderMedBody(); }
+
+// ===== BUSCADOR GLOBAL =====
+const GLOBAL_DOCS = [];
+function buildGlobalIndex() {
+  GLOBAL_DOCS.length = 0;
+  DATA.specialties.forEach(s => {
+    s.records.forEach(r => {
+      GLOBAL_DOCS.push({ tipo: 'informe', esp: s.name, fecha: fmt(r['Fecha']), dObj: parseCitaDate(r['Fecha']),
+        medicoTipo: fmt(r['Médico']), campos: r, ref: REF_LOOKUP.has(r) ? REF_LOOKUP.get(r) : null });
+    });
+  });
+  DATA.analytics.forEach(a => {
+    GLOBAL_DOCS.push({ tipo: 'analitica', esp: 'Analíticas', fecha: fmt(a['Fecha']), dObj: parseCitaDate(a['Fecha']),
+      medicoTipo: fmt(a['Tipo']), campos: a, ref: REF_LOOKUP.has(a) ? REF_LOOKUP.get(a) : null });
+  });
+  DATA.medicacion.forEach(m => {
+    GLOBAL_DOCS.push({ tipo: 'medicacion', esp: fmt(m['Especialidad']) || 'Medicación', fecha: fmt(m['Fecha Prescripción']), dObj: parseCitaDate(m['Fecha Prescripción']),
+      medicoTipo: fmt(m['Prescriptor']), campos: m, ref: null, panelFijo: 'panel_medicacion' });
+  });
+}
+function detalleDoc(d, nq) {
+  // Devuelve el fragmento del campo que coincide (o un resumen por defecto)
+  let firstMatch = '';
+  for (const [campo, val] of Object.entries(d.campos)) {
+    if (norm(campo).includes(nq) || norm(val).includes(nq)) { firstMatch = campo + ': ' + fmt(val); break; }
+  }
+  if (firstMatch) return firstMatch;
+  if (d.tipo === 'analitica') return fmt(d.campos['Parámetro']) + ': ' + fmt(d.campos['Valor']) + ' ' + fmt(d.campos['Unidad']);
+  if (d.tipo === 'medicacion') return fmt(d.campos['Fármaco']) + ' ' + fmt(d.campos['Dosis']);
+  return fmt(d.campos['Diagnóstico']) || fmt(d.campos['Motivo Consulta']) || '';
+}
+function valorDoc(d, nq) {
+  if (d.tipo === 'analitica') {
+    const v = fmt(d.campos['Valor']); const u = fmt(d.campos['Unidad']);
+    return (v + (u ? ' ' + u : '')).trim() || '—';
+  }
+  if (d.tipo === 'medicacion') {
+    return (fmt(d.campos['Dosis']) || fmt(d.campos['Posología']) || '—');
+  }
+  // informe: mostrar el nombre del campo donde apareció la palabra
+  for (const [campo, val] of Object.entries(d.campos)) {
+    if (norm(campo).includes(nq) || norm(val).includes(nq)) return campo;
+  }
+  return '—';
+}
+function buscarGlobal(q) {
+  const cont = document.getElementById('globalResults');
+  const counter = document.getElementById('searchCounter');
+  if (!cont) return;
+  const nq = norm(q);
+  if (GLOBAL_DOCS.length === 0) buildGlobalIndex();
+  if (!nq) {
+    cont.innerHTML = '<div class="res-count">Escribe una palabra para buscar en todo tu historial.</div>';
+    if (counter) counter.textContent = '—';
+    return;
+  }
+  const hits = [];
+  GLOBAL_DOCS.forEach((doc, di) => {
+    let match = false;
+    for (const [campo, val] of Object.entries(doc.campos)) {
+      if (norm(campo).includes(nq) || norm(val).includes(nq)) { match = true; break; }
+    }
+    if (match) hits.push(di);
+  });
+  hits.sort((a, b) => {
+    const da = GLOBAL_DOCS[a].dObj, db = GLOBAL_DOCS[b].dObj;
+    if (da && db) return db - da; if (da) return -1; if (db) return 1; return 0;
+  });
+  if (counter) counter.textContent = hits.length + ' result.';
+  if (!hits.length) { cont.innerHTML = '<div class="res-count">Sin resultados para “' + escapeHTML(q.trim()) + '”.</div>'; return; }
+  let H = '<div class="table-container"><div class="table-scroll"><table class="res-table"><thead><tr>'
+        + '<th>Fecha</th><th>Origen</th><th>Médico / Tipo</th><th>Valor</th></tr></thead><tbody>';
+  hits.forEach(di => {
+    const d = GLOBAL_DOCS[di];
+    const badge = d.tipo === 'analitica' ? '<span class="res-badge b-ana">Analítica</span>'
+                : d.tipo === 'medicacion' ? '<span class="res-badge b-med">Medicación</span>'
+                : '<span class="res-badge b-inf">Informe</span>';
+    H += '<tr class="res-trow" onclick="irAResultado(' + di + ')">'
+       + '<td class="res-fecha">' + escapeHTML(d.fecha || '—') + '</td>'
+       + '<td>' + badge + '<div class="res-esp">' + escapeHTML(d.esp) + '</div></td>'
+       + '<td class="res-medico">' + escapeHTML(d.medicoTipo || '—') + '</td>'
+       + '<td class="res-valor">' + resaltar(valorDoc(d, nq), q.trim()) + '</td>'
+       + '</tr>';
+  });
+  H += '</tbody></table></div></div>';
+  cont.innerHTML = H;
+}
+function resaltar(txt, q) {
+  const clean = fmt(txt).replace(/\n/g, ' ');
+  const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig');
+  return escapeHTML(clean).replace(re, '<mark>$1</mark>');
+}
+function irAResultado(di) {
+  const d = GLOBAL_DOCS[di];
+  const panel = (d.ref != null && REF_MAP[d.ref]) ? REF_MAP[d.ref].panel : (d.panelFijo || null);
+  if (!panel) { activateTab('medicacion'); return; }
+  const target = panel.replace('panel_', '');
+  activateTab(target);
+  if (target === 'medicacion') { renderMedBody(); return; }
+  if (d.ref != null) {
+    setTimeout(() => {
+      const row = document.getElementById('rowref_' + d.ref);
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.classList.add('row-highlight');
+        setTimeout(() => row.classList.remove('row-highlight'), 2600);
+      }
+    }, 120);
+  }
+}
+
+// ===== EXPORTAR DATOS =====
+function cargarExcelDesdeMenu() {
+  closeMenu();
+  document.getElementById('fileInput').click();
+}
+
+function descargarExcel() {
+  closeMenu();
+  abrirDB().then(db => {
+    const tx = db.transaction(DB_STORE, 'readonly');
+    const req = tx.objectStore(DB_STORE).get(DB_KEY);
+    req.onsuccess = e => {
+      const buf = e.target.result;
+      if (!buf) { mostrarToast('⚠️ No hay ningún Excel guardado. Usa «Cargar Excel» primero.'); return; }
+      const hoy = new Date();
+      const nombre = 'Médico ' + hoy.getDate() + '-' + (hoy.getMonth() + 1) + '-' + String(hoy.getFullYear()).slice(2) + '.xlsx';
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      mostrarToast('✓ Descargado «' + nombre + '» — es el Excel que tiene el dashboard');
+    };
+    req.onerror = () => mostrarToast('⚠️ No se pudo leer el Excel guardado.');
+  }).catch(() => mostrarToast('⚠️ No se pudo abrir el almacenamiento local.'));
+}
+
+function exportarDatos() {
+  closeMenu();
+  const meds = DATA.medicacion.map(m => { const e = medEstado(m); return { farmaco: fmt(m['Fármaco']), dosis: fmt(m['Dosis']), tomando: e.tomando, fin: e.fin }; });
+  const notas = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf('nota__') === 0) notas[k] = localStorage.getItem(k);
+    }
+  } catch (e) {}
+  const payload = { proyecto: 'Gestor médico', exportado: new Date().toISOString(), medicacion: meds, citas_comentarios: notas };
+  const hoy = new Date();
+  const nombre = 'Gestor médico ' + hoy.getDate() + '-' + (hoy.getMonth() + 1) + '-' + String(hoy.getFullYear()).slice(2) + '.json';
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  mostrarToast('✓ Exportado como “' + nombre + '” — guárdalo y súbelo cuando pidas una actualización');
+}
+function mostrarToast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 4500);
+}
+
+function filtrarAnaliticas(q) {
+  const norm = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const nq = norm(q.trim());
+  const table = document.getElementById('anaTable');
+  if (!table) return;
+  const rows = table.querySelectorAll('tbody tr');
+  let visibles = 0;
+  rows.forEach(tr => {
+    const txt = norm(tr.textContent);
+    const match = !nq || txt.includes(nq);
+    tr.style.display = match ? '' : 'none';
+    if (match) visibles++;
+  });
+  const badge = document.getElementById('anaBadge');
+  if (badge) badge.textContent = visibles + ' registro' + (visibles !== 1 ? 's' : '');
+  const c = document.getElementById('anaCount');
+  if (c) c.textContent = nq ? ('Filtrando “' + q.trim() + '”') : '';
+}
+
+// ===== Navegación menú / vistas =====
+// Historial interno de estados: {view:'inicio'} o {view:'secciones', panel:'resumen'}
+const NAV_HIST = [{ view: 'inicio' }];
+function pushHist(state) {
+  const last = NAV_HIST[NAV_HIST.length - 1];
+  if (last && last.view === state.view && last.panel === state.panel) return; // no duplicar
+  NAV_HIST.push(state);
+}
+
+function toggleMenu() {
+  const m = document.getElementById('menu'), b = document.getElementById('burger'), s = document.getElementById('scrim');
+  const open = m.classList.toggle('open'); b.classList.toggle('open', open); s.classList.toggle('show', open);
+}
+function closeMenu() {
+  document.getElementById('menu').classList.remove('open');
+  document.getElementById('burger').classList.remove('open');
+  document.getElementById('scrim').classList.remove('show');
+}
+function toggleSub() {
+  document.getElementById('submenu').classList.toggle('open');
+  document.getElementById('expEsp').classList.toggle('open');
+}
+function showView(v) {
+  document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
+  document.getElementById('view_' + v).classList.add('active');
+  window.scrollTo(0, 0);
+}
+function goInicio() { NAV_HIST.length = 1; showView('inicio'); closeMenu(); }
+
+function go(v) {
+  if (v === 'medicacion') { alert('La sección Medicación se activa en la próxima fase.'); closeMenu(); return; }
+  closeMenu();
+}
+function activateTab(target, skipHist) {
+  document.querySelectorAll('.panel').forEach(p => { p.classList.toggle('active', p.id === 'panel_' + target); });
+  showView('secciones');
+  if (target === 'medicacion') renderMedBody();
+  if (target === 'buscador') buscarGlobal(document.getElementById('globalSearch') ? document.getElementById('globalSearch').value : '');
+  if (!skipHist) pushHist({ view: 'secciones', panel: target });
+  closeMenu();
+}
+
+// Botón VOLVER: pulsación = estado anterior; mantener 2s = inicio
+function volverAtras() {
+  if (NAV_HIST.length <= 1) { NAV_HIST.length = 1; goInicio(); return; }
+  NAV_HIST.pop();                       // quitar estado actual
+  const prev = NAV_HIST[NAV_HIST.length - 1];
+  if (prev.view === 'inicio') { showView('inicio'); closeMenu(); }
+  else { activateTab(prev.panel, true); }
+}
+function irAlInicioTotal() {
+  NAV_HIST.length = 1;                   // reset historial
+  showView('inicio'); closeMenu();
+}
+(function initBackBtn() {
+  const btn = document.getElementById('btnBack');
+  if (!btn) return;
+  let timer = null, longFired = false;
+  const start = (e) => { longFired = false; timer = setTimeout(() => { longFired = true; irAlInicioTotal(); }, 2000); };
+  const end = (e) => {
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (!longFired) { volverAtras(); }
+    if (e) e.preventDefault();
+  };
+  const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  btn.addEventListener('mousedown', start);
+  btn.addEventListener('mouseup', end);
+  btn.addEventListener('mouseleave', cancel);
+  btn.addEventListener('touchstart', start, { passive: true });
+  btn.addEventListener('touchend', end);
+  btn.addEventListener('touchcancel', cancel);
+})();
+
+// Ordena una copia del array por su campo de fecha, más reciente primero.
+// Filas sin fecha válida van al final, conservando su orden relativo.
+function ordenarPorFechaDesc(arr, campoFecha) {
+  const withIdx = arr.map((r, i) => ({ r, i, d: parseCitaDate(r[campoFecha]) }));
+  withIdx.sort((a, b) => {
+    if (a.d && b.d) return b.d - a.d;
+    if (a.d && !b.d) return -1;
+    if (!a.d && b.d) return 1;
+    return a.i - b.i;
+  });
+  return withIdx.map(x => x.r);
+}
+
+function parseCitaDate(str) {
+  if (str instanceof Date) return str;
+  const s = String(str).trim();
+  const m1 = s.match(/^(\d{1,2})-(\d{1,2})-(\d{2})\s+(\d{1,2}):(\d{2})/);
+  if (m1) return new Date(2000 + parseInt(m1[3]), parseInt(m1[2]) - 1, parseInt(m1[1]), parseInt(m1[4]), parseInt(m1[5]));
+  const m1b = s.match(/^(\d{1,2})-(\d{1,2})-(\d{2})/);
+  if (m1b) return new Date(2000 + parseInt(m1b[3]), parseInt(m1b[2]) - 1, parseInt(m1b[1]));
+  const m2 = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m2) return new Date(parseInt(m2[3]), parseInt(m2[2]) - 1, parseInt(m2[1]));
+  const m3 = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2})/);
+  if (m3) return new Date(2000 + parseInt(m3[3]), parseInt(m3[2]) - 1, parseInt(m3[1]));
+  return null;
+}
+
+function toggleCita(i) {
+  document.getElementById('cita_' + i).classList.toggle('open');
+}
+
+function notaKey(especialidad, fecha) {
+  return 'nota__' + especialidad.replace(/\s/g,'_') + '__' + fecha.replace(/\s/g,'_');
+}
+
+function getNota(especialidad, fecha) {
+  try { return localStorage.getItem(notaKey(especialidad, fecha)) || ''; } catch(e) { return ''; }
+}
+
+function setNota(especialidad, fecha, value) {
+  try { localStorage.setItem(notaKey(especialidad, fecha), value); } catch(e) {}
+}
+
+function extractFechaHora(str) {
+  const m = String(str).match(/^(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}(?:\s+\d{1,2}:\d{2})?)/);
+  if (m) return m[1].trim();
+  const m2 = String(str).match(/^(\d{1,2}\/\d{1,2}\/\d{4})/);
+  if (m2) return m2[1].trim();
+  return String(str).split('—')[0].trim();
+}
+
+function renderCitasPendientes() {
+  const citas = [];
+  const now = new Date(); now.setHours(0,0,0,0);
+  DATA.specialties.forEach(s => {
+    s.records.forEach(r => {
+      const citaKey = Object.keys(r).find(k => {
+        const norm = k.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s/g,'').toLowerCase();
+        return norm === 'proximacita' || norm.includes('proxima');
+      });
+      const proxCitaRaw = citaKey ? r[citaKey] : undefined;
+      const proxCita = proxCitaRaw instanceof Date ? proxCitaRaw : String(proxCitaRaw || '').trim();
+      if (!proxCita || proxCita === '—' || proxCita === '') return;
+      const citaDate = parseCitaDate(proxCita);
+      if (citaDate && citaDate < now) return;
+      citas.push({
+        especialidad: s.name, fechaCorta: extractFechaHora(proxCita), dateObj: citaDate,
+        medico: fmt(r['Médico']), centro: fmt(r['Centro']),
+        motivo: fmt(r['Motivo Consulta']), tipo: fmt(r['Tipo Exploración']),
+        observaciones: fmt(r['Observaciones'])
+      });
+    });
+  });
+  citas.sort((a,b) => {
+    if (a.dateObj && b.dateObj) return a.dateObj - b.dateObj;
+    if (a.dateObj) return -1; if (b.dateObj) return 1; return 0;
+  });
+  const btn = document.getElementById('btnCitas');
+  if (citas.length > 0) { btn.style.display = 'flex'; document.getElementById('citasCount').textContent = citas.length; }
+  else { btn.style.display = 'none'; }
+
+  let H = '<div class="citas-title-row"><h3>🗓️ Citas Pendientes</h3><div class="line"></div></div>';
+  citas.forEach((c, i) => {
+    const hasDetail = c.tipo || c.centro || c.medico || c.motivo || c.observaciones;
+    H += '<div class="cita-card" id="cita_' + i + '">';
+    H += '<div class="cita-card-header" onclick="toggleCita(' + i + ')">';
+    H += '<div class="cita-card-header-left">';
+    H += '<div class="cita-header-row1">';
+    H += '<h4>' + escapeHTML(c.especialidad) + '</h4>';
+    H += '<input type="text" class="cita-nota" placeholder="Añade un comentario..."';
+    H += ' value="' + escapeHTML(getNota(c.especialidad, c.fechaCorta)) + '"';
+    H += ' oninput="setNota(\'' + escapeHTML(c.especialidad) + '\',\'' + escapeHTML(c.fechaCorta) + '\',this.value)"';
+    H += ' onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" onmousedown="event.stopPropagation()">';
+    H += '</div>';
+    H += '<span class="cita-fecha">' + escapeHTML(c.fechaCorta) + '</span>';
+    H += '</div>';
+    H += '<span class="cita-toggle">' + (hasDetail ? '▼' : '') + '</span>';
+    H += '</div>';
+    if (hasDetail) {
+      H += '<div class="cita-detail">';
+      if (c.tipo)   H += '<strong>Exploración:</strong> ' + escapeHTML(c.tipo) + '<br>';
+      if (c.centro) H += '<strong>Centro:</strong> ' + escapeHTML(c.centro) + '<br>';
+      if (c.medico) H += '<strong>Médico:</strong> ' + escapeHTML(c.medico) + '<br>';
+      if (c.motivo) H += '<strong>Motivo:</strong> ' + escapeHTML(c.motivo) + '<br>';
+      if (c.observaciones) H += '<strong>Observaciones:</strong> ' + escapeHTML(c.observaciones);
+      H += '</div>';
+    }
+    H += '</div>';
+  });
+  document.getElementById('citasPanel').innerHTML = H;
+}
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(reg => reg.unregister());
+  });
+  caches.keys().then(keys => {
+    keys.forEach(key => caches.delete(key));
+  });
+}
+</script>
+</body>
+</html>
