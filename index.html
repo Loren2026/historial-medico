@@ -311,6 +311,95 @@
     .summary-grid { grid-template-columns: 1fr; }
     .header-info { display: none; }
   }
+
+
+  /* Candidata Agenda 25-09-2026 */
+  .cita-day-group {
+    display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 12px;
+    align-items: start; margin-bottom: 20px;
+  }
+  .cita-day-label {
+    position: sticky; top: 10px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 12px 6px;
+    border-radius: 16px; color: #0B1020; background: #F8FAFC;
+    text-align: center; box-shadow: 0 7px 20px rgba(0,0,0,.26);
+  }
+  .cita-day-label .day { font-size: 38px; line-height: .95; font-weight: 800; }
+  .cita-day-label .month { margin-top: 7px; font-size: 18px; line-height: 1; font-weight: 800; }
+  .cita-day-label .year { margin-top: 8px; font-size: 12px; font-weight: 700; }
+  .cita-day-list {
+    position: relative; display: grid; gap: 12px; padding-left: 17px;
+    border-left: 3px solid #516A99;
+  }
+  .cita-card {
+    position: relative; overflow: visible; margin-bottom: 0; background: #111B2F;
+    border: 1px solid #3A5077; border-left: 1px solid #3A5077; border-radius: 18px;
+  }
+  .cita-card::before {
+    content: ''; position: absolute; left: -26px; top: 27px;
+    width: 13px; height: 13px; border: 4px solid #0B0F19;
+    border-radius: 50%; background: #35C8F2;
+  }
+  .cita-card-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding: 15px; cursor: pointer; gap: 10px; transition: background .2s;
+  }
+  .cita-card-header:hover { background: #17243D; border-radius: 18px; }
+  .cita-card-header-left { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
+  .cita-time {
+    font-family: 'Space Mono', monospace; font-size: 24px; line-height: 1;
+    font-weight: 700; color: #35C8F2;
+  }
+  .cita-header-row1 { display: flex; align-items: center; gap: 10px; }
+  .cita-specialty {
+    appearance: none; display: inline-flex; align-items: center; width: fit-content;
+    max-width: 100%; padding: 0; border: 0; border-bottom: 2px solid transparent;
+    color: #F8FAFC; background: transparent; font-family: 'DM Sans', sans-serif;
+    font-size: 19px; line-height: 1.15; font-weight: 700; text-align: left;
+    cursor: pointer; transition: color .2s, border-color .2s;
+  }
+  .cita-specialty:hover, .cita-specialty:focus-visible {
+    color: #FFD84D; border-bottom-color: #FFD84D; outline: none;
+  }
+  .cita-specialty::after { content: '›'; margin-left: 7px; color: #FFD84D; font-size: 22px; }
+  .cita-nota-wrap { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+  .cita-nota-icon { flex: 0 0 auto; font-size: 18px; }
+  .cita-nota {
+    flex: 1; min-width: 0; background: #F4F7FB; border: 1px solid #AEBBD0;
+    border-radius: 12px; padding: 8px 11px; font-family: 'DM Sans', sans-serif;
+    font-size: 15px; font-weight: 500; color: #101827; outline: none;
+    height: 42px; box-sizing: border-box;
+  }
+  .cita-nota:focus { border: 3px solid #FFD84D; background: #fff; }
+  .cita-nota::placeholder { color: #60708A; font-style: italic; opacity: 1; }
+  .cita-toggle {
+    font-size: 18px; color: #F8FAFC; transition: transform .25s; flex-shrink: 0;
+    background: #1D2D4E; border: 1px solid #486089; border-radius: 50%;
+    width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+  }
+  .cita-card.open .cita-toggle { transform: rotate(180deg); }
+  .cita-detail {
+    font-size: 14px; color: #C6D2E6; line-height: 1.65; max-height: 0;
+    overflow: hidden; transition: max-height .35s ease, padding .25s ease;
+    padding: 0 15px; border-top: 0 solid #3A5077;
+  }
+  .cita-card.open .cita-detail { max-height: 700px; padding: 13px 15px 16px; border-top: 1px solid #3A5077; }
+  .cita-detail strong { color: #F8FAFC; }
+  .citas-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .citas-title-row h3 { font-size: 22px; font-weight: 700; color: #F8FAFC; }
+  .citas-title-row .line { flex: 1; height: 1px; background: #3A5077; }
+
+  @media (max-width: 430px) {
+    .cita-day-group { grid-template-columns: 68px minmax(0, 1fr); gap: 9px; }
+    .cita-day-list { padding-left: 13px; }
+    .cita-card::before { left: -22px; }
+    .cita-day-label .day { font-size: 33px; }
+    .cita-day-label .month { font-size: 16px; }
+    .cita-card-header { padding: 13px 12px; }
+    .cita-time { font-size: 22px; }
+    .cita-specialty { font-size: 17px; }
+  }
+
 </style>
 </head>
 <body>
@@ -1024,6 +1113,30 @@ function extractFechaHora(str) {
   return String(str).split('—')[0].trim();
 }
 
+function citaDayParts(dateObj, fallback) {
+  if (dateObj instanceof Date && !isNaN(dateObj)) {
+    return {
+      key: dateObj.getFullYear() + '-' + (dateObj.getMonth() + 1) + '-' + dateObj.getDate(),
+      day: String(dateObj.getDate()).padStart(2, '0'),
+      month: dateObj.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '').toUpperCase(),
+      year: String(dateObj.getFullYear())
+    };
+  }
+  const match = String(fallback || '').match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})/);
+  const months = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+  if (!match) return { key: String(fallback), day: '--', month: 'PEND.', year: '' };
+  const year = match[3].length === 2 ? '20' + match[3] : match[3];
+  return { key: year + '-' + match[2] + '-' + match[1], day: match[1].padStart(2, '0'), month: months[parseInt(match[2]) - 1] || '', year };
+}
+
+function citaTime(dateObj, fallback) {
+  if (dateObj instanceof Date && !isNaN(dateObj)) {
+    return String(dateObj.getHours()).padStart(2, '0') + ':' + String(dateObj.getMinutes()).padStart(2, '0');
+  }
+  const match = String(fallback || '').match(/\s(\d{1,2}:\d{2})/);
+  return match ? match[1] : '';
+}
+
 function renderCitasPendientes() {
   const citas = [];
   const now = new Date(); now.setHours(0,0,0,0);
@@ -1040,6 +1153,7 @@ function renderCitasPendientes() {
       if (citaDate && citaDate < now) return;
       citas.push({
         especialidad: s.name, fechaCorta: extractFechaHora(proxCita), dateObj: citaDate,
+        tabTarget: 'spec_' + s.name.replace(/\s/g, '_'),
         medico: fmt(r['Médico']), centro: fmt(r['Centro']),
         motivo: fmt(r['Motivo Consulta']), tipo: fmt(r['Tipo Exploración']),
         observaciones: fmt(r['Observaciones'])
@@ -1054,45 +1168,72 @@ function renderCitasPendientes() {
   if (citas.length > 0) { btn.style.display = 'flex'; document.getElementById('citasCount').textContent = citas.length; }
   else { btn.style.display = 'none'; }
 
-  let H = '<div class="citas-title-row"><h3>🗓️ Citas Pendientes</h3><div class="line"></div></div>';
-  citas.forEach((c, i) => {
-    const hasDetail = c.tipo || c.centro || c.medico || c.motivo || c.observaciones;
-    H += '<div class="cita-card" id="cita_' + i + '">';
-    H += '<div class="cita-card-header" onclick="toggleCita(' + i + ')">';
-    H += '<div class="cita-card-header-left">';
-    H += '<div class="cita-header-row1">';
-    H += '<h4>' + escapeHTML(c.especialidad) + '</h4>';
-    H += '<input type="text" class="cita-nota" placeholder="Añade un comentario..."';
-    H += ' value="' + escapeHTML(getNota(c.especialidad, c.fechaCorta)) + '"';
-    H += ' oninput="setNota(\'' + escapeHTML(c.especialidad) + '\',\'' + escapeHTML(c.fechaCorta) + '\',this.value)"';
-    H += ' onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" onmousedown="event.stopPropagation()">';
-    H += '</div>';
-    H += '<span class="cita-fecha">' + escapeHTML(c.fechaCorta) + '</span>';
-    H += '</div>';
-    H += '<span class="cita-toggle">' + (hasDetail ? '▼' : '') + '</span>';
-    H += '</div>';
-    if (hasDetail) {
-      H += '<div class="cita-detail">';
-      if (c.tipo)   H += '<strong>Exploración:</strong> ' + escapeHTML(c.tipo) + '<br>';
-      if (c.centro) H += '<strong>Centro:</strong> ' + escapeHTML(c.centro) + '<br>';
-      if (c.medico) H += '<strong>Médico:</strong> ' + escapeHTML(c.medico) + '<br>';
-      if (c.motivo) H += '<strong>Motivo:</strong> ' + escapeHTML(c.motivo) + '<br>';
-      if (c.observaciones) H += '<strong>Observaciones:</strong> ' + escapeHTML(c.observaciones);
-      H += '</div>';
-    }
-    H += '</div>';
+  const groups = [];
+  citas.forEach(cita => {
+    const parts = citaDayParts(cita.dateObj, cita.fechaCorta);
+    let group = groups.find(item => item.key === parts.key);
+    if (!group) { group = { key: parts.key, parts, citas: [] }; groups.push(group); }
+    group.citas.push(cita);
   });
-  document.getElementById('citasPanel').innerHTML = H;
+
+  let cardIndex = 0;
+  let H = '<div class="citas-title-row"><h3>🗓️ Citas Pendientes</h3><div class="line"></div></div>';
+  groups.forEach(group => {
+    H += '<section class="cita-day-group">';
+    H += '<div class="cita-day-label" aria-label="' + escapeHTML(group.parts.day + ' ' + group.parts.month + ' ' + group.parts.year) + '">';
+    H += '<span class="day">' + escapeHTML(group.parts.day) + '</span>';
+    H += '<span class="month">' + escapeHTML(group.parts.month) + '</span>';
+    H += '<span class="year">' + escapeHTML(group.parts.year) + '</span></div>';
+    H += '<div class="cita-day-list">';
+    group.citas.forEach(c => {
+      const i = cardIndex++;
+      const hasDetail = c.tipo || c.centro || c.medico || c.motivo || c.observaciones;
+      H += '<div class="cita-card" id="cita_' + i + '">';
+      H += '<div class="cita-card-header" onclick="toggleCita(' + i + ')">';
+      H += '<div class="cita-card-header-left">';
+      H += '<span class="cita-time">' + escapeHTML(citaTime(c.dateObj, c.fechaCorta)) + '</span>';
+      H += '<div class="cita-header-row1">';
+      H += '<button type="button" class="cita-specialty" data-target="' + escapeHTML(c.tabTarget) + '"';
+      H += ' aria-label="Abrir la pestaña de ' + escapeHTML(c.especialidad) + '">' + escapeHTML(c.especialidad) + '</button>';
+      H += '</div>';
+      H += '<div class="cita-nota-wrap"><span class="cita-nota-icon" aria-hidden="true">💬</span>';
+      H += '<input type="text" class="cita-nota" placeholder="Añade un comentario..."';
+      H += ' value="' + escapeHTML(getNota(c.especialidad, c.fechaCorta)) + '"';
+      H += ' oninput="setNota(\'' + escapeHTML(c.especialidad) + '\',\'' + escapeHTML(c.fechaCorta) + '\',this.value)"';
+      H += ' onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" onmousedown="event.stopPropagation()">';
+      H += '</div></div>';
+      H += '<span class="cita-toggle">' + (hasDetail ? '⌄' : '') + '</span>';
+      H += '</div>';
+      if (hasDetail) {
+        H += '<div class="cita-detail">';
+        if (c.tipo) H += '<strong>Exploración:</strong> ' + escapeHTML(c.tipo) + '<br>';
+        if (c.centro) H += '<strong>Centro:</strong> ' + escapeHTML(c.centro) + '<br>';
+        if (c.medico) H += '<strong>Médico:</strong> ' + escapeHTML(c.medico) + '<br>';
+        if (c.motivo) H += '<strong>Motivo:</strong> ' + escapeHTML(c.motivo) + '<br>';
+        if (c.observaciones) H += '<strong>Observaciones:</strong> ' + escapeHTML(c.observaciones);
+        H += '</div>';
+      }
+      H += '</div>';
+    });
+    H += '</div></section>';
+  });
+  const panel = document.getElementById('citasPanel');
+  panel.innerHTML = H;
+  panel.querySelectorAll('.cita-specialty[data-target]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      activateTab(button.dataset.target);
+    });
+  });
 }
 </script>
 
 <script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    regs.forEach(reg => reg.unregister());
-  });
-  caches.keys().then(keys => {
-    keys.forEach(key => caches.delete(key));
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.protocol === 'http:')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(registration => registration.update())
+      .catch(error => console.warn('No se pudo registrar el modo sin conexión:', error));
   });
 }
 </script>
