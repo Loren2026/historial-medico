@@ -10,6 +10,7 @@
 <meta name="theme-color" content="#0B0F19">
 <title>Historial Médico</title>
 <link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -410,6 +411,7 @@
     🗓️ Citas <span class="citas-count" id="citasCount">0</span>
   </button>
   <input type="file" id="fileInput" accept=".xlsx,.xls">
+  <input type="file" id="jsonInput" accept=".json,application/json">
   <div class="header-info">
     <span id="poliza"></span>
     <span class="tag" id="lastUpdate">Sin datos</span>
@@ -507,6 +509,55 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
   reader.readAsArrayBuffer(file);
 });
 
+
+document.getElementById('jsonInput').addEventListener('change', function(e) {
+  const input = e.target;
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    try {
+      const payload = JSON.parse(event.target.result);
+      if (!payload || typeof payload !== 'object' || (payload.proyecto && payload.proyecto !== 'Gestor m\u00e9dico')) {
+        throw new Error('La copia no pertenece al proyecto Gestor m\u00e9dico.');
+      }
+      const comments = payload && payload.citas_comentarios;
+      if (!comments || typeof comments !== 'object' || Array.isArray(comments)) {
+        throw new Error('La copia no contiene comentarios de citas v\u00e1lidos.');
+      }
+      const validComments = Object.entries(comments).filter(([key, value]) =>
+        /^nota__.+__\d{1,2}-\d{1,2}-\d{2,4}(?:_\d{1,2}:\d{2})?$/.test(key) && typeof value === 'string'
+      );
+      const medications = Array.isArray(payload.medicacion)
+        ? payload.medicacion.filter(item => item && typeof item.farmaco === 'string' && typeof item.dosis === 'string')
+        : [];
+      if (!validComments.length && !medications.length) {
+        throw new Error('La copia no contiene datos compatibles para restaurar.');
+      }
+      const message = 'Se restaurar\u00e1n ' + validComments.length + ' comentario' + (validComments.length === 1 ? '' : 's')
+        + ' y ' + medications.length + ' estado' + (medications.length === 1 ? '' : 's')
+        + ' de medicaci\u00f3n. Los datos con la misma clave se actualizar\u00e1n. \u00bfContinuar?';
+      if (!window.confirm(message)) return;
+      validComments.forEach(([key, value]) => localStorage.setItem(key, value));
+      medications.forEach(item => {
+        const key = 'med__' + norm(item.farmaco) + '__' + norm(item.dosis);
+        localStorage.setItem(key, JSON.stringify({ tomando: Boolean(item.tomando), fin: String(item.fin || '') }));
+      });
+      if (DATA.specialties.length) renderCitasPendientes();
+      if (DATA.medicacion.length) renderMedBody();
+      mostrarToast('\u2713 Restaurados ' + validComments.length + ' comentarios y ' + medications.length + ' estados de medicaci\u00f3n.');
+    } catch (error) {
+      mostrarToast('\u26A0 No se pudo restaurar la copia: ' + (error.message || 'JSON no v\u00e1lido.'));
+    } finally {
+      input.value = '';
+    }
+  };
+  reader.onerror = function() {
+    input.value = '';
+    mostrarToast('\u26A0 No se pudo leer la copia JSON.');
+  };
+  reader.readAsText(file, 'utf-8');
+});
 window.addEventListener('load', cargarExcelGuardado);
 
 document.addEventListener('click', function(e) {
@@ -609,6 +660,7 @@ function renderDashboard() {
   if (DATA.sanitas) menuH += '<div class="menu-item" onclick="activateTab(\'sanitas\')"><span class="ico">🏥</span> Datos Sanitas</div>';
   menuH += '<div class="menu-item" onclick="activateTab(\'analiticas\')"><span class="ico">🔬</span> Analíticas</div>';
   menuH += '<div class="menu-item" onclick="exportarDatos()"><span class="ico">⬇️</span> Exportar datos</div>';
+  menuH += '<div class="menu-item" onclick="cargarCopiaDesdeMenu()"><span class="ico">&#8638;</span> Restaurar copia JSON</div>';
   menuH += '<div class="menu-item" onclick="cargarExcelDesdeMenu()"><span class="ico">📂</span> Cargar Excel</div>';
   menuH += '<div class="menu-item" onclick="descargarExcel()"><span class="ico">📗</span> Descargar Excel</div>';
   menuH += '<div class="menu-sep"></div>';
@@ -926,6 +978,13 @@ function cargarExcelDesdeMenu() {
   document.getElementById('fileInput').click();
 }
 
+
+function cargarCopiaDesdeMenu() {
+  closeMenu();
+  const input = document.getElementById('jsonInput');
+  input.value = '';
+  input.click();
+}
 function descargarExcel() {
   closeMenu();
   abrirDB().then(db => {

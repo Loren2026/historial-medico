@@ -1,3 +1,4 @@
+// Restore JSON support - 2026-09-26
 const CACHE = 'historial-v6-agenda';
 const APP_SHELL = [
   './',
