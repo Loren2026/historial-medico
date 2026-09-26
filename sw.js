@@ -1,5 +1,5 @@
 // Restore JSON support - 2026-09-26
-const CACHE = 'historial-v6-agenda';
+const CACHE = 'historial-v8-menu-scroll';
 const APP_SHELL = [
   './',
   './index.html',

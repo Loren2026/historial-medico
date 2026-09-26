@@ -66,11 +66,11 @@
 
   /* ===== MENÚ DESPLEGABLE ===== */
   .menu {
-    position: sticky; top: 66px; z-index: 490;
+    position: fixed; top: var(--menu-top, 71px); left: 0; right: 0; z-index: 490;
     max-height: 0; overflow: hidden; background: var(--surface);
     border-bottom: 1px solid transparent; transition: max-height .32s ease, border-color .2s;
   }
-  .menu.open { max-height: 680px; border-bottom-color: var(--border); box-shadow: 0 12px 30px rgba(0,0,0,.4); }
+  .menu.open { max-height: calc(100vh - var(--menu-top, 71px)); max-height: calc(100dvh - var(--menu-top, 71px)); overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; border-bottom-color: var(--border); box-shadow: 0 12px 30px rgba(0,0,0,.4); }
   .menu-inner { padding: 8px; }
   .menu-item {
     display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 10px;
@@ -85,7 +85,7 @@
   .menu-item .chev { margin-left: auto; transition: transform .25s; color: var(--text3); }
   .menu-item.exp.open .chev { transform: rotate(180deg); }
   .submenu { max-height: 0; overflow: hidden; transition: max-height .3s ease; background: var(--bg); border-radius: 10px; margin: 0 8px; }
-  .submenu.open { max-height: 560px; margin: 4px 8px 8px; overflow-y: auto; }
+  .submenu.open { max-height: none; margin: 4px 8px 8px; overflow: visible; }
   .sub-item {
     display: flex; align-items: center; gap: 10px; padding: 12px 16px 12px 30px; cursor: pointer;
     font-size: 14px; color: var(--text2); border-bottom: 1px solid var(--border); transition: .15s;
@@ -1057,7 +1057,14 @@ function pushHist(state) {
   NAV_HIST.push(state);
 }
 
+function syncMenuPosition() {
+  document.documentElement.style.setProperty('--menu-top', document.querySelector('.topbar').getBoundingClientRect().bottom + 'px');
+}
+window.addEventListener('resize', syncMenuPosition);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', syncMenuPosition);
+
 function toggleMenu() {
+  syncMenuPosition();
   const m = document.getElementById('menu'), b = document.getElementById('burger'), s = document.getElementById('scrim');
   const open = m.classList.toggle('open'); b.classList.toggle('open', open); s.classList.toggle('show', open);
 }
