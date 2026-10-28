@@ -1,5 +1,5 @@
 // Restore JSON support - 2026-09-26
-const CACHE = 'historial-v12-actualizacion-avisos';
+const CACHE = 'historial-v13-actualizar-menu';
 const APP_SHELL = [
   './',
   './index.html',
@@ -12,18 +12,31 @@ const APP_SHELL = [
   './alarms.css'
 ];
 
+async function refreshAppFiles() {
+  const files = await Promise.all(APP_SHELL.map(async path => {
+    const response = await fetch(new URL(path, self.registration.scope), {cache:'no-store', signal:AbortSignal.timeout(15000)});
+    if (!response.ok) throw Error('No se pudo descargar la aplicación');
+    const bytes = await response.arrayBuffer();
+    return [path, new Response(bytes, {status:response.status, statusText:response.statusText, headers:response.headers})];
+  }));
+  const cache = await caches.open(CACHE);
+  await Promise.all(files.map(([path, response]) => cache.put(path, response)));
+}
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(APP_SHELL)));
-  self.skipWaiting();
+  event.waitUntil(refreshAppFiles().then(() => self.skipWaiting()));
+});
+self.addEventListener('message', event => {
+  if (event.data?.type !== 'REFRESH_APP' || !event.ports?.[0]) return;
+  const port = event.ports[0];
+  event.waitUntil(refreshAppFiles().then(() => port.postMessage({ok:true})).catch(() => port.postMessage({ok:false})));
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => Promise.all(
       keys.filter(key => key.startsWith('historial-') && key !== CACHE).map(key => caches.delete(key))
-    ))
+    )).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', event => {

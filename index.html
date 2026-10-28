@@ -421,7 +421,7 @@
 </div>
 
 <div class="menu" id="menu">
-  <div class="menu-inner" id="menuInner"></div>
+  <div class="menu-inner" id="menuInner"><button type="button" class="menu-item" onclick="actualizarApp()" style="width:100%;background:none;border:0;color:inherit;font:inherit;text-align:left"><span class="ico">↻</span> Actualizar</button></div>
 </div>
 <div class="scrim" id="scrim" onclick="closeMenu()"></div>
 
@@ -659,6 +659,7 @@ function renderDashboard() {
   menuH += '<div class="menu-item" onclick="activateTab(\'medicacion\')"><span class="ico">💊</span> Medicación</div>';
   menuH += '<div class="menu-item" onclick="activateTab(\'resumen\')"><span class="ico">📊</span> Resumen</div>';
   menuH += '<div class="menu-item" onclick="Alarms.showSettings()"><span class="ico">🔔</span> Avisos de citas</div>';
+  menuH += '<button type="button" class="menu-item" onclick="actualizarApp()" style="width:100%;background:none;border:0;color:inherit;font:inherit;text-align:left"><span class="ico">↻</span> Actualizar</button>';
   if (DATA.sanitas) menuH += '<div class="menu-item" onclick="activateTab(\'sanitas\')"><span class="ico">🏥</span> Datos Sanitas</div>';
   menuH += '<div class="menu-item" onclick="activateTab(\'analiticas\')"><span class="ico">🔬</span> Analíticas</div>';
   menuH += '<div class="menu-item" onclick="exportarDatos()"><span class="ico">⬇️</span> Exportar datos</div>';
@@ -1075,6 +1076,51 @@ function closeMenu() {
   document.getElementById('burger').classList.remove('open');
   document.getElementById('scrim').classList.remove('show');
 }
+let actualizacionEnCurso = false;
+async function actualizarApp() {
+  if (actualizacionEnCurso) return;
+  actualizacionEnCurso = true;
+  document.activeElement?.blur();
+  closeMenu();
+  const box = document.createElement('dialog');
+  box.className = 'alarm-dialog';
+  box.setAttribute('aria-label', 'Actualizar aplicación');
+  const title = document.createElement('h2'); title.textContent = 'Actualizar';
+  const message = document.createElement('p'); message.setAttribute('role', 'status');
+  message.textContent = 'Buscando la última versión… Se conservarán tu historial y tus avisos.';
+  box.append(title, message); document.body.append(box); box.showModal();
+  try {
+    if (!navigator.onLine) throw Error('Necesitas conexión para actualizar.');
+    if (!('serviceWorker' in navigator)) throw Error('Este navegador no permite actualizar la aplicación instalada.');
+    const registration = await navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'});
+    await registration.update();
+    const pending = registration.installing || registration.waiting;
+    if (pending && pending.state !== 'activated') await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => finish(Error('La actualización está tardando. Inténtalo de nuevo.')), 20000);
+      const check = () => {
+        if (pending.state === 'activated') finish();
+        else if (pending.state === 'redundant') finish(Error('No se ha podido instalar la actualización.'));
+      };
+      function finish(error) { clearTimeout(timer); pending.removeEventListener('statechange', check); error ? reject(error) : resolve(); }
+      pending.addEventListener('statechange', check); check();
+    });
+    if (!registration.active) throw Error('El servicio de la app todavía no está disponible.');
+    message.textContent = 'Descargando la aplicación actualizada…';
+    await new Promise((resolve, reject) => {
+      const channel = new MessageChannel();
+      const timer = setTimeout(() => finish(Error('No se ha podido completar la actualización. Reinténtalo con conexión.')), 25000);
+      function finish(error) { clearTimeout(timer); channel.port1.close(); error ? reject(error) : resolve(); }
+      channel.port1.onmessage = event => event.data?.ok ? finish() : finish(Error('No se ha podido descargar la actualización. Tus datos se conservan.'));
+      registration.active.postMessage({type:'REFRESH_APP'}, [channel.port2]);
+    });
+    message.textContent = 'Actualización preparada. Abriendo la app…';
+    location.reload();
+  } catch (error) {
+    message.textContent = error.message;
+    const close = document.createElement('button'); close.textContent = 'Cerrar'; close.onclick = () => {box.close();box.remove();}; box.append(close);
+    actualizacionEnCurso = false;
+  }
+}
 function toggleSub() {
   document.getElementById('submenu').classList.toggle('open');
   document.getElementById('expEsp').classList.toggle('open');
@@ -1303,7 +1349,7 @@ function renderCitasPendientes() {
 <script>
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.protocol === 'http:')) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
+    navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'})
       .then(registration => registration.update())
       .catch(error => console.warn('No se pudo registrar el modo sin conexión:', error));
   });
