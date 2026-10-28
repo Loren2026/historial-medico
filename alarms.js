@@ -3,6 +3,7 @@
   const KEY = 'historial_alarmas_v1', TOKEN = 'historial_alarmas_dispositivo_v1';
   const config = window.ALARMS_CONFIG || {};
   let appointments = [], appointmentsReady = false, queue = Promise.resolve(), revision = 0, status = 'Sin conectar', storageOK = true;
+  let remoteLoaded = false, remoteRevision = null, remoteSchedule = [], remoteLoading = null;
   let saved;
   try {
     saved = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -33,8 +34,48 @@
       headers: { 'Content-Type': 'application/json', ...(unauthenticated ? {} : { Authorization: 'Bearer ' + token() }) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(15000)
     });
-    if (!response.ok) throw Error(response.status === 401 ? 'Vuelve a conectar este móvil.' : 'No se ha podido confirmar el cambio. Reinténtalo con conexión.');
+    if (!response.ok) {
+      if (response.status === 409) throw Error('La programación cambió o la app necesita actualizarse. Cierra y vuelve a abrir la app para recuperar los horarios antes de guardar.');
+      throw Error(response.status === 401 ? 'No se ha podido validar la conexión de este móvil. Tus horarios se conservan en el servidor.' : 'No se ha podido confirmar el cambio. Reinténtalo con conexión.');
+    }
     return response.json();
+  }
+  function soundHelp(back = showSettings) {
+    shell('Cambiar sonido y tipo de aviso');
+    paragraph('1. Envía un aviso de prueba desde «Avisos en este móvil».');
+    paragraph('2. Desliza desde la parte superior de la pantalla para abrir la cortina de notificaciones.');
+    paragraph('3. Mantén el dedo sobre la notificación recibida durante uno o dos segundos. Un toque breve abre la app; mantenerla pulsada muestra sus ajustes.');
+    paragraph('4. Pulsa el engranaje, Ajustes o Más ajustes. Busca Sonido, Vibración o Silencioso en la categoría de esta notificación. Los nombres dependen de tu móvil.');
+    paragraph('Si aparece Chrome, busca la categoría de loren2026.github.io. Cambiar ajustes generales de Chrome puede afectar a otras páginas.', 'alarm-hint');
+    paragraph('El tono y el volumen los controla Android. Esta app no puede escoger una melodía ni forzar el sonido con No molestar.', 'alarm-hint');
+    button('Volver', back); open();
+  }
+  async function loadRemote() {
+    if (remoteLoaded) return;
+    if (remoteLoading) return remoteLoading;
+    remoteLoading = restoreRemote().finally(() => { remoteLoading=null; });
+    return remoteLoading;
+  }
+  async function restoreRemote() {
+    if (!appointmentsReady) throw Error('Carga el historial vigente antes de sincronizar los avisos.');
+    const data = await request('/status');
+    if (data.apiVersion !== 2 || !Number.isSafeInteger(data.revision) || !Array.isArray(data.reminders)) throw Error('La actualización del servicio sigue en curso. Los horarios anteriores se conservan.');
+    const next = {}, matches = new Set();
+    for (const item of data.reminders) {
+      if (item.startsAt <= Date.now()) continue;
+      const candidates = appointments.filter(c => AlarmCore.madridDate(c.fechaCorta) === item.startsAt);
+      if (candidates.length !== 1 || matches.has(AlarmCore.key(candidates[0]))) throw Error('Hay citas programadas que no coinciden de forma única con el historial cargado. Carga el Excel vigente; se conservan los avisos del servidor.');
+      const k=AlarmCore.key(candidates[0]); matches.add(k);
+      next[k]={id:item.id,offsets:AlarmCore.offsets(item.offsets)};
+    }
+    for (const c of appointments) {
+      const k=AlarmCore.key(c),startsAt=AlarmCore.madridDate(c.fechaCorta);
+      if (startsAt>Date.now() && !matches.has(k)) next[k]={id:saved[k]?.id||crypto.randomUUID(),offsets:[10080,4320,1440]};
+    }
+    // Restore from the server before any write. Never let an old local copy clear its schedule.
+    localStorage.setItem(KEY+'_antes_recuperacion',JSON.stringify(saved));
+    localStorage.setItem(KEY,JSON.stringify(next)); saved=next;
+    remoteRevision=data.revision;remoteSchedule=data.reminders;remoteLoaded=true;refreshButtons();
   }
   function showSettings() {
     closeMenu(); shell('Avisos en este móvil');
@@ -42,6 +83,7 @@
     const p = paragraph(status, 'alarm-status'); p.dataset.alarmStatus = '';
     paragraph('El sonido lo controla el móvil. Revisa el volumen, No molestar y el permiso de notificaciones. Los avisos necesitan conexión y pueden retrasarse.', 'alarm-hint');
     paragraph('La pantalla bloqueada mostrará solo «Cita médica» y su fecha y hora. No se enviarán informes, diagnósticos ni comentarios.', 'alarm-hint');
+    button('Cómo cambiar sonido y tipo de aviso', () => soundHelp());
     if (!configured()) { paragraph('Servicio de avisos pendiente de activación. Puedes guardar tus preferencias, pero todavía no recibirás notificaciones.'); open(); return; }
     if (!token()) {
       const input = document.createElement('input'); input.type = 'password'; input.autocomplete = 'off'; input.className = 'alarm-pairing'; input.placeholder = 'Código de vinculación'; input.setAttribute('aria-label', 'Código de vinculación de este móvil'); dialog.append(input);
@@ -49,6 +91,7 @@
         const b = event.currentTarget; b.disabled = true;
         try {
           if (!input.value.trim()) throw Error('Introduce el código de vinculación.');
+          localStorage.setItem(KEY,JSON.stringify(saved));
           if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) throw Error('Este navegador no admite estos avisos.');
           const permission = await Notification.requestPermission();
           if (permission !== 'granted') throw Error('Permiso no concedido. Activa las notificaciones en los ajustes del móvil.');
@@ -56,7 +99,7 @@
           const raw = atob(config.publicKey.replace(/-/g, '+').replace(/_/g, '/'));
           const subscription = await registration.pushManager.getSubscription() || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.from(raw, c => c.charCodeAt(0)) });
           const result = await request('/pair', { code: input.value.trim(), subscription: subscription.toJSON() }, true);
-          localStorage.setItem(TOKEN, result.token); input.value = ''; await sync(); showSettings();
+          localStorage.setItem(TOKEN, result.token); input.value = ''; remoteLoaded=false; await sync(); showSettings();
         } catch (error) { status = error.message; paintStatus(); } finally { b.disabled = false; }
       });
     } else {
@@ -66,10 +109,6 @@
         catch (error) { status = error.message; } finally { b.disabled = false; paintStatus(); }
       });
       button('Reintentar sincronización', () => sync());
-      button('Volver a vincular este móvil', () => {
-        if (!confirm('Necesitarás un nuevo código de vinculación. Los avisos anteriores seguirán activos hasta completar la nueva conexión. ¿Continuar?')) return;
-        localStorage.removeItem(TOKEN); status = 'Introduce un nuevo código de vinculación.'; showSettings();
-      });
     }
     open();
   }
@@ -96,15 +135,16 @@
       if (startsAt - n * 60000 <= Date.now()) throw Error('Ese horario ya pasó. Elige menos antelación.');
       const input = [...grid.querySelectorAll('input')].find(x => +x.value === n); if (input) input.checked = true; else addOption(n, true); message.textContent = '';
     } catch(e) { message.textContent = e.message; } }, custom);
-    paragraph('Puedes seleccionar varios avisos. Si cambias la fecha de la cita, tendrás que elegirlos de nuevo.', 'alarm-hint');
+    paragraph('Puedes ajustar cada cita. Los avisos cuyo plazo ya pasó no se envían. Las citas nuevas se preparan con 7, 3 y 1 día de antelación.', 'alarm-hint');
     const actions = document.createElement('div'); actions.className = 'alarm-actions'; dialog.append(actions);
     async function save(values) {
       if (!storageOK) { message.textContent = status; return; }
       try {
+        if (configured() && token() && !remoteLoaded) { await loadRemote(); edit(cita); return; }
         const selected = AlarmCore.offsets(values);
         if (selected.some(n => startsAt - n*60000 <= Date.now())) throw Error('Uno de los avisos ya pasó. Revisa la selección.');
         const previous = saved[k];
-        if (selected.length) saved[k] = { id: previous?.id || crypto.randomUUID(), offsets: selected }; else delete saved[k];
+        saved[k] = { id: previous?.id || crypto.randomUUID(), offsets: selected };
         try { persist(); } catch(e) { if(previous) saved[k]=previous; else delete saved[k]; throw Error('No se pudo guardar. No se ha enviado ningún cambio.'); }
         refreshButtons(); await sync(); message.textContent = status;
       } catch(e) { message.textContent = e.message; }
@@ -112,6 +152,7 @@
     button('Guardar avisos', () => save([...grid.querySelectorAll('input:checked:not(:disabled)')].map(x => +x.value)), actions, 'primary');
     button('Quitar avisos', () => { grid.querySelectorAll('input').forEach(x => x.checked = false); return save([]); }, actions);
     button('Conectar / probar móvil', showSettings, actions);
+    button('Cómo cambiar sonido y tipo de aviso', () => soundHelp(() => edit(cita)), actions);
     open();
   }
   function refreshButtons() {
@@ -125,14 +166,17 @@
       if (current !== revision || !storageOK || !configured() || !token()) return;
       try {
         if (Notification.permission !== 'granted') throw Error('Notificaciones bloqueadas: revisa el permiso del móvil.');
+        await loadRemote();
         const registration = await worker(), subscription = await registration.pushManager.getSubscription();
-        if (!subscription) throw Error('La suscripción ya no existe. Es necesario volver a vincular el móvil.');
+        if (!subscription) throw Error('No se encuentra la suscripción del móvil. Los horarios se conservan; revisa el permiso de notificaciones.');
+        if (remoteSchedule.some(item => item.startsAt>Date.now() && !appointments.some(c => AlarmCore.madridDate(c.fechaCorta)===item.startsAt))) throw Error('El historial cargado no contiene todas las citas programadas. Se conservan los avisos; revisa el Excel antes de cambiarlos.');
         const items = [];
         for (const c of appointments) {
           const pref = saved[AlarmCore.key(c)], startsAt = AlarmCore.madridDate(c.fechaCorta);
           if (pref && startsAt > Date.now() && !items.some(x => x.id === pref.id)) items.push({ id: pref.id, startsAt, offsets: AlarmCore.offsets(pref.offsets) });
         }
-        const confirmed = await request('/reminders', { subscription: subscription.toJSON(), reminders: items });
+        const confirmed = await request('/reminders', { clientVersion:2, revision:remoteRevision, subscription: subscription.toJSON(), reminders: items });
+        remoteRevision=confirmed.revision; remoteSchedule=items;
         if (confirmed.pushExpired) throw Error('La suscripción del móvil ha caducado. Hace falta volver a vincularlo.');
         if (current === revision) status = 'Horarios confirmados por el servicio. Usa el aviso de prueba para comprobar este móvil.';
       } catch (error) { if (current === revision) status = error.message + ' Los horarios anteriores pueden seguir activos hasta confirmar el cambio.'; }
