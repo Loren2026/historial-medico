@@ -1092,6 +1092,7 @@ async function actualizarApp() {
   try {
     if (!navigator.onLine) throw Error('Necesitas conexión para actualizar.');
     if (!('serviceWorker' in navigator)) throw Error('Este navegador no permite actualizar la aplicación instalada.');
+    if (window.Alarms) await Alarms.prepareUpdate();
     const registration = await navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'});
     await registration.update();
     const pending = registration.installing || registration.waiting;
@@ -1345,7 +1346,8 @@ function renderCitasPendientes() {
 
 <script src="alarms-config.js"></script>
 <script src="alarms-core.js"></script>
-<script src="alarms.js?v=20261028-12"></script>
+<script src="binding-store.js?v=20261028-14"></script>
+<script src="alarms.js?v=20261028-14"></script>
 <script>
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.protocol === 'http:')) {
   window.addEventListener('load', () => {

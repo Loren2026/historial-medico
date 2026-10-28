@@ -1,5 +1,6 @@
 // Restore JSON support - 2026-09-26
-const CACHE = 'historial-v13-actualizar-menu';
+importScripts('./binding-store.js?v=20261028-14');
+const CACHE = 'historial-v14-vinculacion-persistente';
 const APP_SHELL = [
   './',
   './index.html',
@@ -8,7 +9,8 @@ const APP_SHELL = [
   './icon-512.png',
   './alarms-config.js',
   './alarms-core.js',
-  './alarms.js?v=20261028-12',
+  './binding-store.js?v=20261028-14',
+  './alarms.js?v=20261028-14',
   './alarms.css'
 ];
 
@@ -26,6 +28,7 @@ self.addEventListener('install', event => {
   event.waitUntil(refreshAppFiles().then(() => self.skipWaiting()));
 });
 self.addEventListener('message', event => {
+  if(event.data?.type==='BINDING_CAPABILITIES'){event.ports?.[0]?.postMessage({bindingRecovery:true});return;}
   if (event.data?.type !== 'REFRESH_APP' || !event.ports?.[0]) return;
   const port = event.ports[0];
   event.waitUntil(refreshAppFiles().then(() => port.postMessage({ok:true})).catch(() => port.postMessage({ok:false})));
@@ -76,6 +79,20 @@ self.addEventListener('fetch', event => {
 self.addEventListener('push', event => {
   let message = {};
   try { message = event.data ? event.data.json() : {}; } catch (_) {}
+  if (message.type === 'BINDING_RECOVERY') {
+    event.waitUntil((async () => {
+      let restored=false;
+      try {
+        const pending=await BindingStore.read('recovery');
+        if (pending?.id===message.requestId && pending.expiresAt>Date.now()) {
+          await BindingStore.credential(message.token);
+          await BindingStore.write('recovery',null); restored=true;
+          for(const client of await self.clients.matchAll({type:'window',includeUncontrolled:true})) client.postMessage({type:'BINDING_RESTORED'});
+        }
+      } catch (_) {}
+      await self.registration.showNotification('Conexión de avisos',{body:restored?'Conexión recuperada. Abre Historial Médico para comprobar tus avisos.':'Abre Historial Médico para revisar la conexión de avisos.',icon:'./icon-192.png',tag:'historial-conexion',data:{url:self.registration.scope}});
+    })()); return;
+  }
   const body = typeof message.body === 'string' ? message.body.slice(0, 200) : 'Abre la app para consultar tus citas.';
   event.waitUntil(self.registration.showNotification(message.test ? 'Prueba de avisos' : 'Cita médica', {
     body, icon: './icon-192.png', badge: './icon-192.png',

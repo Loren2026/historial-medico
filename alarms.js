@@ -14,7 +14,62 @@
   const dialog = document.createElement('dialog');
   dialog.className = 'alarm-dialog'; dialog.setAttribute('aria-label', 'Avisos de citas'); document.body.append(dialog);
   const configured = () => /^https:\/\//.test(config.apiUrl || '') && !!config.publicKey;
-  const token = () => localStorage.getItem(TOKEN) || '';
+  let activeToken = '', bindingReady = null, initialBindingRecorded=false;
+  const token = () => activeToken;
+  async function ensureBinding(force=false) {
+    if (bindingReady && !force) return bindingReady;
+    bindingReady=(async()=>{
+      let local='';try{local=localStorage.getItem(TOKEN)||'';}catch(_){}
+      const backup=await BindingStore.read('credential');
+      if(!initialBindingRecorded){
+        await BindingStore.write('lastLoad',{at:new Date().toISOString(),credencialLocal:!!local,copia:!!backup?.token,origen:location.origin});
+        initialBindingRecorded=true;
+      }
+      activeToken=(force&&backup?.token)||local||backup?.token||'';
+      if(activeToken){
+        if(backup?.token!==activeToken) await BindingStore.credential(activeToken);
+        try{localStorage.setItem(TOKEN,activeToken);}catch(_){}
+      }
+      return activeToken;
+    })();
+    try{return await bindingReady;}catch(error){bindingReady=null;throw error;}
+  }
+  async function saveBinding(value){
+    await BindingStore.credential(value);activeToken=value;bindingReady=Promise.resolve(value);
+    try{localStorage.setItem(TOKEN,value);}catch(_){}
+  }
+  async function recoverBinding(){
+    try{
+      const originalToken=activeToken;
+      const registration=await worker(),subscription=await registration.pushManager.getSubscription();
+      if(!subscription)throw Error('Este navegador no conserva una suscripción de avisos. Hay que comprobar qué copia de la app se vinculó.');
+      await new Promise((resolve,reject)=>{
+        const channel=new MessageChannel(),timer=setTimeout(()=>finish(false),4000);
+        function finish(ok){clearTimeout(timer);channel.port1.close();ok?resolve():reject(Error('Pulsa Actualizar en el menú y vuelve a intentar la recuperación.'));}
+        channel.port1.onmessage=event=>finish(event.data?.bindingRecovery===true);
+        registration.active?.postMessage({type:'BINDING_CAPABILITIES'},[channel.port2]);
+      });
+      const id=crypto.randomUUID();
+      await BindingStore.write('recovery',{id,expiresAt:Date.now()+180000});
+      status='Comprobando este móvil mediante una notificación…';paintStatus();
+      await request('/recover',{requestId:id,subscription:subscription.toJSON()},true);
+      await ensureBinding(true);
+      if(activeToken&&activeToken!==originalToken){remoteLoaded=false;await sync();showSettings();return;}
+      status='Recuperación solicitada. Espera la notificación y mantén la app abierta.';paintStatus();
+    }catch(error){status=error.message;paintStatus();}
+  }
+  async function connectionDetails(){
+    shell('Estado de la conexión');
+    try{
+      const backup=await BindingStore.read('credential'),previous=await BindingStore.read('beforeUpdate'),lastLoad=await BindingStore.read('lastLoad');
+      const registration=await navigator.serviceWorker.getRegistration(),sub=await registration?.pushManager.getSubscription();
+      let http='Sin credencial';const value=localStorage.getItem(TOKEN)||backup?.token;
+      if(value&&configured()){try{http=(await fetch(config.apiUrl+'/status',{cache:'no-store',headers:{Authorization:'Bearer '+value},signal:AbortSignal.timeout(10000)})).status;}catch(_){http='Sin respuesta';}}
+      const info={version:'28-10-2026 · 14',origen:location.origin,modo:matchMedia('(display-mode: standalone)').matches?'App instalada':'Navegador',configurada:configured(),credencialLocal:!!localStorage.getItem(TOKEN),copiaDeConexion:!!backup?.token,suscripcion:!!sub,permiso:typeof Notification==='undefined'?'No disponible':Notification.permission,respuestaServicio:http,preferenciasLocales:!!localStorage.getItem(KEY),antesDeActualizar:previous||'Sin registro anterior',alAbrirLaApp:lastLoad||'Sin registro'};
+      const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font:inherit';pre.textContent=JSON.stringify(info,null,2);dialog.append(pre);
+    }catch(error){paragraph(error.message);}
+    button('Volver',()=>showSettings());open();
+  }
   const worker = () => Promise.race([navigator.serviceWorker.ready, new Promise((_,reject) => setTimeout(() => reject(Error('No se ha podido iniciar el servicio del navegador. Recarga con conexión.')),10000))]);
   const persist = () => { localStorage.setItem(KEY, JSON.stringify(saved)); };
   function paintStatus() {
@@ -31,13 +86,19 @@
   function paragraph(text, cls = '') { const p = document.createElement('p'); p.textContent = text; p.className = cls; dialog.append(p); return p; }
   function button(text, action, parent = dialog, cls = '') { const b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.className = cls; b.onclick = action; parent.append(b); return b; }
   function open() { if (!dialog.open) dialog.showModal(); }
-  async function request(path, body, unauthenticated = false) {
+  async function request(path, body, unauthenticated = false, retried = false) {
     const response = await fetch(config.apiUrl.replace(/\/$/, '') + path, {
       method: body === undefined ? 'GET' : 'POST', cache: 'no-store', credentials: 'omit',
       headers: { 'Content-Type': 'application/json', ...(unauthenticated ? {} : { Authorization: 'Bearer ' + token() }) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(15000)
     });
     if (!response.ok) {
+      if(response.status===401&&!unauthenticated&&!retried){
+        const previous=activeToken;await ensureBinding(true);
+        if(activeToken&&activeToken!==previous)return request(path,body,false,true);
+      }
+      if(response.status===404&&path==='/recover')throw Error('Esta suscripción no coincide con la vinculada. Abre Estado de la conexión para comprobarlo; no generes otro código todavía.');
+      if(response.status===429)throw Error('Espera un minuto antes de reintentar la recuperación.');
       if (response.status === 409) throw Error('La programación cambió o la app necesita actualizarse. Cierra y vuelve a abrir la app para recuperar los horarios antes de guardar.');
       throw Error(response.status === 401 ? 'No se ha podido validar la conexión de este móvil. Tus horarios se conservan en el servidor.' : 'No se ha podido confirmar el cambio. Reinténtalo con conexión.');
     }
@@ -80,21 +141,32 @@
     localStorage.setItem(KEY,JSON.stringify(next)); saved=next;
     remoteRevision=data.revision;remoteSchedule=data.reminders;remoteLoaded=true;refreshButtons();
   }
-  function showSettings() {
+  async function showSettings(options={}) {
+    try{await ensureBinding();}catch(error){status=error.message;}
     closeMenu(); shell('Avisos en este móvil');
     paragraph('Elige los avisos desde el botón de cada cita. Llegarán como notificaciones de Historial Médico.');
     const p = paragraph(status, 'alarm-status'); p.dataset.alarmStatus = '';
     paragraph('El sonido lo controla el móvil. Revisa el volumen, No molestar y el permiso de notificaciones. Los avisos necesitan conexión y pueden retrasarse.', 'alarm-hint');
     paragraph('La pantalla bloqueada mostrará solo «Cita médica» y su fecha y hora. No se enviarán informes, diagnósticos ni comentarios.', 'alarm-hint');
     button('Cómo cambiar sonido y tipo de aviso', () => soundHelp());
+    button('Estado de la conexión',connectionDetails);
     if (!configured()) { paragraph('Servicio de avisos pendiente de activación. Puedes guardar tus preferencias, pero todavía no recibirás notificaciones.'); open(); return; }
     if (!token()) {
+      const registration=await navigator.serviceWorker.getRegistration();
+      const existingSubscription=await registration?.pushManager.getSubscription();
+      if(existingSubscription&&!options.pair){
+        paragraph('Este móvil conserva su suscripción. Puedes recuperar la conexión sin generar otro código.');
+        button('Recuperar conexión sin código',recoverBinding);
+        button('Activar por primera vez con código',()=>showSettings({pair:true}));
+        open();return;
+      }
       const input = document.createElement('input'); input.type = 'password'; input.autocomplete = 'off'; input.className = 'alarm-pairing'; input.placeholder = 'Código de vinculación'; input.setAttribute('aria-label', 'Código de vinculación de este móvil'); dialog.append(input);
       button('Activar notificaciones', async event => {
         const b = event.currentTarget; b.disabled = true;
         try {
           if (!input.value.trim()) throw Error('Introduce el código de vinculación.');
           localStorage.setItem(KEY,JSON.stringify(saved));
+          await BindingStore.write('writeCheck',{at:Date.now()});
           if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) throw Error('Este navegador no admite estos avisos.');
           const permission = await Notification.requestPermission();
           if (permission !== 'granted') throw Error('Permiso no concedido. Activa las notificaciones en los ajustes del móvil.');
@@ -102,7 +174,7 @@
           const raw = atob(config.publicKey.replace(/-/g, '+').replace(/_/g, '/'));
           const subscription = await registration.pushManager.getSubscription() || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.from(raw, c => c.charCodeAt(0)) });
           const result = await request('/pair', { code: input.value.trim(), subscription: subscription.toJSON() }, true);
-          localStorage.setItem(TOKEN, result.token); input.value = ''; remoteLoaded=false; await sync(); showSettings();
+          await saveBinding(result.token); input.value = ''; remoteLoaded=false; await sync(); showSettings();
         } catch (error) { status = error.message; paintStatus(); } finally { b.disabled = false; }
       });
     } else {
@@ -112,6 +184,7 @@
         catch (error) { status = error.message; } finally { b.disabled = false; paintStatus(); }
       });
       button('Reintentar sincronización', () => sync());
+      button('Recuperar conexión sin código',recoverBinding);
     }
     open();
   }
@@ -161,8 +234,10 @@
   function refreshButtons() {
     document.querySelectorAll('[data-alarm-index]').forEach(b => { const c = appointments[+b.dataset.alarmIndex], item = c && saved[AlarmCore.key(c)]; b.textContent = item?.offsets.length ? '🔔 Avisos (' + item.offsets.length + ')' : '🔔 Elegir avisos'; });
   }
-  function sync() {
+  async function sync() {
     const current = ++revision;
+    try{await ensureBinding();}catch(error){status=error.message;paintStatus();return;}
+    if(current!==revision)return;
     if (!storageOK) { paintStatus(); return Promise.resolve(); }
     status = configured() && token() ? 'Cambios pendientes de confirmar…' : 'Preferencias guardadas en este móvil. Notificaciones todavía sin activar.'; paintStatus();
     queue = queue.catch(() => {}).then(async () => {
@@ -196,9 +271,22 @@
       panel.querySelectorAll('.cita-card').forEach((card,i) => { const b = button('🔔 Elegir avisos', e => { e.stopPropagation(); edit(citas[i]); },card,'alarm-button'); b.dataset.alarmIndex = i; });
       refreshButtons(); sync();
     }, showSettings,
+    async prepareUpdate(){
+      await ensureBinding();
+      if(activeToken)await BindingStore.credential(activeToken);
+      await BindingStore.write('beforeUpdate',{at:new Date().toISOString(),credencial:!!activeToken,copia:!!(await BindingStore.read('credential'))?.token,origen:location.origin});
+    },
     exportPreferences() { return saved; }
   };
   window.addEventListener('online', () => { if (appointmentsReady) sync(); });
-  if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', event => { if (event.data?.type === 'OPEN_APPOINTMENTS') goInicio(); });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && appointmentsReady) sync(); });
+  async function resumeBinding(show=false){
+    try{await ensureBinding(true);remoteLoaded=false;if(appointmentsReady)await sync();if(show)showSettings();}
+    catch(error){status=error.message;paintStatus();}
+  }
+  if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', event => {
+    if(event.data?.type==='BINDING_RESTORED')resumeBinding(true);
+    if(event.data?.type==='OPEN_APPOINTMENTS'){resumeBinding();goInicio();}
+  });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && appointmentsReady) resumeBinding(); });
+  window.addEventListener('storage',event=>{if(event.key===TOKEN||event.key===null){bindingReady=null;resumeBinding();}});
 })();
