@@ -1,5 +1,5 @@
 // Restore JSON support - 2026-09-26
-const CACHE = 'historial-v10-recuperacion-avisos';
+const CACHE = 'historial-v11-citas-sin-confirmacion';
 const APP_SHELL = [
   './',
   './index.html',

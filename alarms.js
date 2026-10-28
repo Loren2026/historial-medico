@@ -18,7 +18,10 @@
   const worker = () => Promise.race([navigator.serviceWorker.ready, new Promise((_,reject) => setTimeout(() => reject(Error('No se ha podido iniciar el servicio del navegador. Recarga con conexión.')),10000))]);
   const persist = () => { localStorage.setItem(KEY, JSON.stringify(saved)); };
   function paintStatus() {
-    document.querySelectorAll('[data-alarm-status]').forEach(el => { el.textContent = status; });
+    document.querySelectorAll('[data-alarm-status]').forEach(el => {
+      el.textContent = status;
+      el.hidden = el.classList.contains('alarm-summary') && status.startsWith('Horarios confirmados por el servicio.');
+    });
   }
   function shell(title) {
     dialog.replaceChildren();
