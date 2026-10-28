@@ -1,0 +1,22 @@
+.alarm-button { margin: 0 12px 16px; padding: 12px 16px; min-height: 48px; border: 1px solid #8ca5d1; border-radius: 12px; color: #f7f9ff; background: #223152; font: inherit; cursor: pointer; }
+.alarm-summary { padding: 10px 12px; color: #f8df71; font-size: 15px; }
+.alarm-dialog { width: min(520px, calc(100% - 24px)); max-height: calc(100dvh - 32px); overflow-y: auto; margin: auto; box-sizing: border-box; border: 1px solid #63789b; border-radius: 20px; padding: 22px; background: #131c2c; color: #f7f9ff; font: 17px/1.5 system-ui; }
+.alarm-dialog::backdrop { background: #000b; }
+.alarm-dialog h2 { margin: 0 36px 12px 0; font-size: 24px; }
+.alarm-dialog p { margin: 12px 0; }
+.alarm-dialog button, .alarm-dialog input, .alarm-dialog select { font: inherit; min-height: 48px; border-radius: 9px; padding: 8px 12px; }
+.alarm-dialog button { background: #253858; color: white; border: 1px solid #8ca5d1; cursor: pointer; }
+.alarm-dialog button.primary { background: #f8df71; color: #111b2b; font-weight: 700; }
+.alarm-dialog button:disabled { opacity: .5; cursor: default; }
+.alarm-dialog .alarm-close { float: right; }
+.alarm-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+.alarm-options label { display: flex; align-items: center; gap: 8px; padding: 4px; border: 1px solid #485c80; border-radius: 8px; }
+.alarm-options input { min-height: 24px; width: 24px; accent-color: #f8df71; }
+.alarm-custom { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.alarm-custom input { width: 75px; }
+.alarm-custom select { max-width: 150px; }
+.alarm-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+.alarm-status { color: #f8df71; min-height: 24px; }
+.alarm-dialog .alarm-hint { font-size: 15px; color: #c3cde0; }
+.alarm-pairing { width: 100%; box-sizing: border-box; margin: 8px 0; }
+@media (max-width: 360px) { .alarm-options { grid-template-columns: 1fr; } }

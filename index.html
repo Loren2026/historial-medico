@@ -12,6 +12,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="alarms.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -657,6 +658,7 @@ function renderDashboard() {
   menuH += '<div class="menu-item" onclick="activateTab(\'buscador\')"><span class="ico">🔎</span> Buscar</div>';
   menuH += '<div class="menu-item" onclick="activateTab(\'medicacion\')"><span class="ico">💊</span> Medicación</div>';
   menuH += '<div class="menu-item" onclick="activateTab(\'resumen\')"><span class="ico">📊</span> Resumen</div>';
+  menuH += '<div class="menu-item" onclick="Alarms.showSettings()"><span class="ico">🔔</span> Avisos de citas</div>';
   if (DATA.sanitas) menuH += '<div class="menu-item" onclick="activateTab(\'sanitas\')"><span class="ico">🏥</span> Datos Sanitas</div>';
   menuH += '<div class="menu-item" onclick="activateTab(\'analiticas\')"><span class="ico">🔬</span> Analíticas</div>';
   menuH += '<div class="menu-item" onclick="exportarDatos()"><span class="ico">⬇️</span> Exportar datos</div>';
@@ -1285,6 +1287,7 @@ function renderCitasPendientes() {
   });
   const panel = document.getElementById('citasPanel');
   panel.innerHTML = H;
+  if (window.Alarms) Alarms.attach(citas);
   panel.querySelectorAll('.cita-specialty[data-target]').forEach(button => {
     button.addEventListener('click', event => {
       event.stopPropagation();
@@ -1294,6 +1297,9 @@ function renderCitasPendientes() {
 }
 </script>
 
+<script src="alarms-config.js"></script>
+<script src="alarms-core.js"></script>
+<script src="alarms.js"></script>
 <script>
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.protocol === 'http:')) {
   window.addEventListener('load', () => {

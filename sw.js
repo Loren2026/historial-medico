@@ -1,11 +1,15 @@
 // Restore JSON support - 2026-09-26
-const CACHE = 'historial-v8-menu-scroll';
+const CACHE = 'historial-v9-avisos';
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './alarms-config.js',
+  './alarms-core.js',
+  './alarms.js',
+  './alarms.css'
 ];
 
 self.addEventListener('install', event => {
@@ -53,4 +57,26 @@ self.addEventListener('fetch', event => {
       return response;
     }))
   );
+});
+
+// Only generic appointment information is included in push messages.
+self.addEventListener('push', event => {
+  let message = {};
+  try { message = event.data ? event.data.json() : {}; } catch (_) {}
+  const body = typeof message.body === 'string' ? message.body.slice(0, 200) : 'Abre la app para consultar tus citas.';
+  event.waitUntil(self.registration.showNotification(message.test ? 'Prueba de avisos' : 'Cita médica', {
+    body, icon: './icon-192.png', badge: './icon-192.png',
+    tag: typeof message.tag === 'string' ? message.tag.slice(0, 100) : 'cita-medica',
+    renotify: false, silent: false, vibrate: [250, 120, 250],
+    data: { url: self.registration.scope }
+  }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const existing = windows.find(client => client.url.startsWith(self.registration.scope));
+    if (existing) { await existing.focus(); existing.postMessage({ type: 'OPEN_APPOINTMENTS' }); }
+    else await self.clients.openWindow(self.registration.scope);
+  })());
 });
