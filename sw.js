@@ -1,5 +1,5 @@
 // Restore JSON support - 2026-09-26
-const CACHE = 'historial-v11-citas-sin-confirmacion';
+const CACHE = 'historial-v12-actualizacion-avisos';
 const APP_SHELL = [
   './',
   './index.html',
@@ -8,7 +8,7 @@ const APP_SHELL = [
   './icon-512.png',
   './alarms-config.js',
   './alarms-core.js',
-  './alarms.js',
+  './alarms.js?v=20261028-12',
   './alarms.css'
 ];
 
