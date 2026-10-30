@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="alarms.css?v=20261030-15">
+<link rel="stylesheet" href="alarms.css?v=20261030-16">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -1256,11 +1256,17 @@ function getNota(especialidad, fecha, textoHistorial = '') {
   try { return localStorage.getItem(notaKey(especialidad, fecha)) ?? textoHistorial; } catch(e) { return textoHistorial; }
 }
 
-function notaDelHistorial(proximaCita, observaciones) {
-  // Only use the description attached to this appointment, never the earlier visit's exploration.
+function notaDelHistorial(proximaCita) {
+  // Identify only an explicitly scheduled test. Earlier findings and consultation notes are not appointment labels.
   const descripcion = (proximaCita instanceof Date ? '' : String(proximaCita || '')).replace(/^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}(?:\s+\d{1,2}:\d{2})?\s*(?:[—–-]\s*)?/, '').split('·')[0].trim();
-  const notas = String(observaciones || '').trim();
-  return [...new Set([descripcion, notas].filter(text => text && text !== '—'))].join('\n');
+  const normalizada = descripcion.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (/^(?:consulta|primera|revision|resultados|control|solicitud|pedir|valorar)\b/.test(normalizada)) return '';
+  if (/^(?:doppler\s+(?:de\s+)?tsa|ecografia\s+(?:de\s+)?cuello)\b/.test(normalizada)) return 'Ecografía de cuello';
+  if (/^(?:extraccion\s+)?analitica\b/.test(normalizada)) return 'Analítica';
+  if (/^(?:rm|resonancia(?:\s+magnetica)?)\s+(?:de\s+)?(?:cerebro|cerebral)\b/.test(normalizada)) return 'Resonancia cerebral';
+  // For other tests retain only their explicit short description, not observations or a presumed clinical link.
+  if (/^(?:ecografia|doppler|rm|resonancia|tac|tc|radiografia|gastroscopia|colonoscopia|electrocardiograma|electromiografia|espirometria|mamografia|densitometria|oct|paquimetria)\b/.test(normalizada)) return descripcion;
+  return '';
 }
 
 function ajustarComentario(el) {
@@ -1327,7 +1333,7 @@ function renderCitasPendientes() {
         medico: fmt(r['Médico']), centro: fmt(r['Centro']),
         motivo: fmt(r['Motivo Consulta']), tipo: fmt(r['Tipo Exploración']),
         observaciones: fmt(r['Observaciones']),
-        notaHistorial: notaDelHistorial(proxCita, fmt(r['Observaciones']))
+        notaHistorial: notaDelHistorial(proxCita)
       });
     });
   });
@@ -1408,7 +1414,7 @@ function renderCitasPendientes() {
 <script src="alarms-config.js"></script>
 <script src="alarms-core.js"></script>
 <script src="binding-store.js?v=20261028-14"></script>
-<script src="alarms.js?v=20261030-15"></script>
+<script src="alarms.js?v=20261030-16"></script>
 <script>
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.protocol === 'http:')) {
   window.addEventListener('load', () => {
