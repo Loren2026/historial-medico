@@ -1,6 +1,6 @@
 // Restore JSON support - 2026-09-26
 importScripts('./binding-store.js?v=20261028-14');
-const CACHE = 'historial-v14-vinculacion-persistente';
+const CACHE = 'historial-v15-ancho-comentarios';
 const APP_SHELL = [
   './',
   './index.html',
@@ -10,8 +10,8 @@ const APP_SHELL = [
   './alarms-config.js',
   './alarms-core.js',
   './binding-store.js?v=20261028-14',
-  './alarms.js?v=20261028-14',
-  './alarms.css'
+  './alarms.js?v=20261030-15',
+  './alarms.css?v=20261030-15'
 ];
 
 async function refreshAppFiles() {

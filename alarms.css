@@ -20,3 +20,17 @@
 .alarm-dialog .alarm-hint { font-size: 15px; color: #c3cde0; }
 .alarm-pairing { width: 100%; box-sizing: border-box; margin: 8px 0; }
 @media (max-width: 360px) { .alarm-options { grid-template-columns: 1fr; } }
+
+/* v15: wrap controls rather than widening or clipping the mobile viewport. */
+.alarm-dialog { min-width: 0; max-width: calc(100% - 24px); overflow-wrap: anywhere; }
+.alarm-dialog button, .alarm-dialog input, .alarm-dialog select { max-width: 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.alarm-dialog h2 { padding-right: 0; margin-right: 0; }
+.alarm-dialog .alarm-close { margin: 0 0 8px 8px; }
+.alarm-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.alarm-options label { min-width: 0; overflow-wrap: anywhere; }
+.alarm-options input { flex: 0 0 24px; }
+.alarm-custom, .alarm-actions { min-width: 0; }
+@media (max-width: 430px) {
+  .alarm-dialog { padding: 16px; }
+  .alarm-options { grid-template-columns: minmax(0, 1fr); }
+}

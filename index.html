@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="alarms.css">
+<link rel="stylesheet" href="alarms.css?v=20261030-15">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -400,6 +400,46 @@
     .cita-card-header { padding: 13px 12px; }
     .cita-time { font-size: 22px; }
     .cita-specialty { font-size: 17px; }
+  }
+
+
+  /* v15: cards must shrink inside the day grid; keep native pinch zoom available. */
+  .cita-day-list { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+  .cita-card, .cita-header-row1, .cita-nota-wrap { min-width: 0; }
+  .cita-specialty { display: block; overflow-wrap: anywhere; white-space: normal; }
+  .cita-card-header { display: grid; grid-template-columns: minmax(0, 1fr) 44px; }
+  .cita-card-header-left { display: contents; }
+  .cita-time, .cita-header-row1, .cita-nota-wrap, .cita-note-label { grid-column: 1 / -1; }
+  .cita-time { grid-column: 1; }
+  .cita-toggle { grid-column: 2; grid-row: 1; }
+  .cita-nota-wrap { align-items: flex-start; }
+  .cita-nota { display: block; width: 100%; min-height: 48px; height: auto; resize: vertical; overflow-wrap: anywhere; white-space: pre-wrap; line-height: 1.45; font-size: 16px; }
+  .cita-note-label { color: #C6D2E6; font-size: 12px; }
+  .cita-detail, .modal-card, .upload-card, .summary-card { overflow-wrap: anywhere; }
+  .cita-card.open .cita-detail { max-height: none; }
+  .alarm-button { max-width: calc(100% - 24px); overflow-wrap: anywhere; white-space: normal; }
+  .citas-title-row h3 { min-width: 0; overflow-wrap: anywhere; }
+  .citas-title-row .line { min-width: 0; }
+  .search-box, .search-box input, .ana-search { min-width: 0; }
+  .search-row, .table-header { flex-wrap: wrap; }
+  .search-box { flex-basis: 200px; }
+  .table-container, .table-scroll { min-width: 0; max-width: 100%; }
+  .menu-item, .sub-item { overflow-wrap: anywhere; }
+  .med-seg { flex-wrap: wrap; max-width: 100%; }
+  @media (max-width: 430px) {
+    .main { padding: 14px 10px 60px; }
+    .cita-day-group { grid-template-columns: 58px minmax(0, 1fr); gap: 8px; }
+    .cita-day-label .day { font-size: 30px; }
+    .cita-day-label .month { font-size: 14px; }
+    .cita-card-header { padding: 12px 10px; gap: 8px; }
+    .cita-day-list { padding-left: 10px; }
+    .cita-card::before { left: -19px; }
+    .topbar { padding: 10px; gap: 8px; }
+    .upload-zone { padding: 20px 12px; }
+    .upload-card { min-width: 0; width: 100%; }
+    .modal-overlay { padding: 12px; }
+    .modal-card { padding: 24px 16px; max-height: calc(100dvh - 24px); }
+    .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
 </style>
@@ -1212,13 +1252,28 @@ function notaKey(especialidad, fecha) {
   return 'nota__' + especialidad.replace(/\s/g,'_') + '__' + fecha.replace(/\s/g,'_');
 }
 
-function getNota(especialidad, fecha) {
-  try { return localStorage.getItem(notaKey(especialidad, fecha)) || ''; } catch(e) { return ''; }
+function getNota(especialidad, fecha, textoHistorial = '') {
+  try { return localStorage.getItem(notaKey(especialidad, fecha)) ?? textoHistorial; } catch(e) { return textoHistorial; }
+}
+
+function notaDelHistorial(proximaCita, observaciones) {
+  // Only use the description attached to this appointment, never the earlier visit's exploration.
+  const descripcion = (proximaCita instanceof Date ? '' : String(proximaCita || '')).replace(/^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}(?:\s+\d{1,2}:\d{2})?\s*(?:[—–-]\s*)?/, '').split('·')[0].trim();
+  const notas = String(observaciones || '').trim();
+  return [...new Set([descripcion, notas].filter(text => text && text !== '—'))].join('\n');
+}
+
+function ajustarComentario(el) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 2 + 'px';
 }
 
 function setNota(especialidad, fecha, value) {
   try { localStorage.setItem(notaKey(especialidad, fecha), value); } catch(e) {}
 }
+
+window.addEventListener('resize', () => document.querySelectorAll('.cita-nota').forEach(ajustarComentario));
+document.fonts?.ready.then(() => document.querySelectorAll('.cita-nota').forEach(ajustarComentario));
 
 function extractFechaHora(str) {
   const m = String(str).match(/^(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}(?:\s+\d{1,2}:\d{2})?)/);
@@ -1271,7 +1326,8 @@ function renderCitasPendientes() {
         tabTarget: 'spec_' + s.name.replace(/\s/g, '_'),
         medico: fmt(r['Médico']), centro: fmt(r['Centro']),
         motivo: fmt(r['Motivo Consulta']), tipo: fmt(r['Tipo Exploración']),
-        observaciones: fmt(r['Observaciones'])
+        observaciones: fmt(r['Observaciones']),
+        notaHistorial: notaDelHistorial(proxCita, fmt(r['Observaciones']))
       });
     });
   });
@@ -1311,11 +1367,11 @@ function renderCitasPendientes() {
       H += '<button type="button" class="cita-specialty" data-target="' + escapeHTML(c.tabTarget) + '"';
       H += ' aria-label="Abrir la pestaña de ' + escapeHTML(c.especialidad) + '">' + escapeHTML(c.especialidad) + '</button>';
       H += '</div>';
+      H += '<label class="cita-note-label" for="comentario_' + i + '">Comentario</label>';
       H += '<div class="cita-nota-wrap"><span class="cita-nota-icon" aria-hidden="true">💬</span>';
-      H += '<input type="text" class="cita-nota" placeholder="Añade un comentario..."';
-      H += ' value="' + escapeHTML(getNota(c.especialidad, c.fechaCorta)) + '"';
-      H += ' oninput="setNota(\'' + escapeHTML(c.especialidad) + '\',\'' + escapeHTML(c.fechaCorta) + '\',this.value)"';
-      H += ' onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" onmousedown="event.stopPropagation()">';
+      H += '<textarea id="comentario_' + i + '" rows="2" class="cita-nota" placeholder="Añade un comentario..."';
+      H += ' data-especialidad="' + escapeHTML(c.especialidad) + '" data-fecha="' + escapeHTML(c.fechaCorta) + '">';
+      H += escapeHTML(getNota(c.especialidad, c.fechaCorta, c.notaHistorial)) + '</textarea>';
       H += '</div></div>';
       H += '<span class="cita-toggle">' + (hasDetail ? '⌄' : '') + '</span>';
       H += '</div>';
@@ -1334,6 +1390,11 @@ function renderCitasPendientes() {
   });
   const panel = document.getElementById('citasPanel');
   panel.innerHTML = H;
+  panel.querySelectorAll('.cita-nota').forEach(input => {
+    ['click','touchstart','mousedown'].forEach(eventName => input.addEventListener(eventName, event => event.stopPropagation()));
+    input.addEventListener('input', () => { setNota(input.dataset.especialidad, input.dataset.fecha, input.value); ajustarComentario(input); });
+    ajustarComentario(input);
+  });
   if (window.Alarms) Alarms.attach(citas);
   panel.querySelectorAll('.cita-specialty[data-target]').forEach(button => {
     button.addEventListener('click', event => {
@@ -1347,7 +1408,7 @@ function renderCitasPendientes() {
 <script src="alarms-config.js"></script>
 <script src="alarms-core.js"></script>
 <script src="binding-store.js?v=20261028-14"></script>
-<script src="alarms.js?v=20261028-14"></script>
+<script src="alarms.js?v=20261030-15"></script>
 <script>
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.protocol === 'http:')) {
   window.addEventListener('load', () => {
