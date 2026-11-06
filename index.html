@@ -13,6 +13,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="alarms.css?v=20261030-17">
+<link rel="stylesheet" href="clinical.css?v=20261106-18">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -471,6 +472,7 @@
     <h2>Carga tu Historial Médico</h2>
     <p>Selecciona tu archivo <strong>Médico DD-M-AA.xlsx</strong><br>para visualizar toda tu información médica.</p>
   </label>
+  <div class="clinical-actions clinical"><button onclick="cargarCopiaDesdeMenu()">Restaurar copia JSON</button></div>
 </div>
 
 <div class="main" id="mainContent">
@@ -492,7 +494,7 @@
 
 <script>
 const DATA = { specialties: [], analytics: [], poliza: '', sanitas: null, medicacion: [] };
-const SKIP = ['Instrucciones', 'Analíticas', 'Datos Sanitas', 'Medicación Actual'];
+const SKIP = ['Instrucciones', 'Analíticas', 'Datos Sanitas', 'Medicación Actual', 'Tensión arterial'];
 const WORD_LIMIT = 10;
 const CELL_STORE = [];
 const REF_MAP = [];        // ref -> {obj, panel}
@@ -516,88 +518,78 @@ function abrirDB() {
   });
 }
 function guardarExcel(buffer) {
-  abrirDB().then(db => {
+  return abrirDB().then(db => new Promise((resolve, reject) => {
     const tx = db.transaction(DB_STORE, 'readwrite');
     tx.objectStore(DB_STORE).put(buffer, DB_KEY);
-  }).catch(() => {});
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = tx.onerror = () => { db.close(); reject(new Error('No se pudo guardar el Excel en este dispositivo.')); };
+  }));
 }
 function cargarExcelGuardado() {
   abrirDB().then(db => {
     const tx = db.transaction(DB_STORE, 'readonly');
     const req = tx.objectStore(DB_STORE).get(DB_KEY);
     req.onsuccess = e => {
+      try {
       if (e.target.result) {
         const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
         parseWorkbook(wb);
         renderDashboard();
         const d2 = new Date(); document.getElementById('lastUpdate').textContent = d2.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'}) + ' 💾';
       }
+      } catch (error) { mostrarToast('No se pudo abrir el historial guardado: '+error.message+'. Los datos no se han borrado.'); }
     };
-  }).catch(() => {});
+    tx.oncomplete = () => db.close();
+    req.onerror = () => mostrarToast('No se pudo leer el historial guardado.');
+  }).catch(() => mostrarToast('No se pudo abrir el almacenamiento de este dispositivo.'));
 }
 
+let MED_IMPORT_BUSY = false;
 document.getElementById('fileInput').addEventListener('change', function(e) {
+  const input = e.target;
   const file = e.target.files[0];
-  if (!file) return;
+  if (!file || MED_IMPORT_BUSY || Clinical.editorOpen()) { input.value=''; mostrarToast('Termina la edición actual antes de cargar otro archivo.'); return; }
   const reader = new FileReader();
-  reader.onload = function(e) {
-    const buffer = e.target.result;
-    guardarExcel(buffer.slice(0));
-    const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
-    parseWorkbook(wb);
-    renderDashboard();
+  reader.onload = async function(e) {
+    if (MED_IMPORT_BUSY) return;
+    MED_IMPORT_BUSY = true;
+    let undo = null;
+    try {
+      const buffer = e.target.result;
+      const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+      const changes = medCambiosExcel(wb);
+      const pressure = Clinical.plan(Clinical.fromWorkbook(wb));
+      const medDetail = Clinical.medicationDiff(wb);
+      const detail = changes.length ? '\n\nEstados distintos guardados en este móvil:\n' + changes.map(medDescribirCambio).join('\n\n') : '';
+      if (!await Clinical.approve('Revisar carga del Excel','Cargar «' + file.name + '» como historial de este dispositivo.' + detail
+        + (medDetail ? '\n\nMEDICACIÓN\n'+medDetail : '')
+        + (pressure.changes.length ? '\n\nTENSIÓN ARTERIAL\n'+Clinical.details(pressure) : '')
+        + '\n\nEl resto del historial se sustituirá por el archivo elegido. Las tomas locales que no figuren en él se conservan. Cancelar conserva los datos actuales.')) return;
+      const undoMed = medGuardarCambios(changes, 'Excel: ' + file.name);
+      undo = undoMed;
+      const undoPressure = Clinical.commit(pressure,'Excel aprobado: '+file.name);
+      undo = () => { undoMed(); undoPressure(); };
+      await guardarExcel(buffer.slice(0));
+      undo = null;
+      parseWorkbook(wb);
+      renderDashboard();
+      mostrarToast('✓ Excel cargado. ' + changes.length + ' estados de medicación conciliados con tu aprobación.');
+    } catch (error) {
+      try { if (undo) undo(); } catch (_) { mostrarToast('⚠ No se pudo recuperar el estado anterior. Revisa la medicación antes de usarla.'); return; }
+      mostrarToast('⚠ No se pudo cargar el Excel: ' + (error.message || 'archivo no válido.'));
+    } finally { MED_IMPORT_BUSY = false; input.value = ''; }
   };
+  reader.onerror = () => { input.value = ''; mostrarToast('⚠ No se pudo leer el Excel.'); };
   reader.readAsArrayBuffer(file);
 });
 
 
 document.getElementById('jsonInput').addEventListener('change', function(e) {
-  const input = e.target;
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(event) {
-    try {
-      const payload = JSON.parse(event.target.result);
-      if (!payload || typeof payload !== 'object' || (payload.proyecto && payload.proyecto !== 'Gestor m\u00e9dico')) {
-        throw new Error('La copia no pertenece al proyecto Gestor m\u00e9dico.');
-      }
-      const comments = payload && payload.citas_comentarios;
-      if (!comments || typeof comments !== 'object' || Array.isArray(comments)) {
-        throw new Error('La copia no contiene comentarios de citas v\u00e1lidos.');
-      }
-      const validComments = Object.entries(comments).filter(([key, value]) =>
-        /^nota__.+__\d{1,2}-\d{1,2}-\d{2,4}(?:_\d{1,2}:\d{2})?$/.test(key) && typeof value === 'string'
-      );
-      const medications = Array.isArray(payload.medicacion)
-        ? payload.medicacion.filter(item => item && typeof item.farmaco === 'string' && typeof item.dosis === 'string')
-        : [];
-      if (!validComments.length && !medications.length) {
-        throw new Error('La copia no contiene datos compatibles para restaurar.');
-      }
-      const message = 'Se restaurar\u00e1n ' + validComments.length + ' comentario' + (validComments.length === 1 ? '' : 's')
-        + ' y ' + medications.length + ' estado' + (medications.length === 1 ? '' : 's')
-        + ' de medicaci\u00f3n. Los datos con la misma clave se actualizar\u00e1n. \u00bfContinuar?';
-      if (!window.confirm(message)) return;
-      validComments.forEach(([key, value]) => localStorage.setItem(key, value));
-      medications.forEach(item => {
-        const key = 'med__' + norm(item.farmaco) + '__' + norm(item.dosis);
-        localStorage.setItem(key, JSON.stringify({ tomando: Boolean(item.tomando), fin: String(item.fin || '') }));
-      });
-      if (DATA.specialties.length) renderCitasPendientes();
-      if (DATA.medicacion.length) renderMedBody();
-      mostrarToast('\u2713 Restaurados ' + validComments.length + ' comentarios y ' + medications.length + ' estados de medicaci\u00f3n.');
-    } catch (error) {
-      mostrarToast('\u26A0 No se pudo restaurar la copia: ' + (error.message || 'JSON no v\u00e1lido.'));
-    } finally {
-      input.value = '';
-    }
-  };
-  reader.onerror = function() {
-    input.value = '';
-    mostrarToast('\u26A0 No se pudo leer la copia JSON.');
-  };
-  reader.readAsText(file, 'utf-8');
+  const input=e.target, file=input.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async event=>{try{await Clinical.restore(JSON.parse(event.target.result));}catch(error){mostrarToast('No se pudo restaurar la copia: '+error.message);}finally{input.value='';}};
+  reader.onerror=()=>{input.value='';mostrarToast('No se pudo leer la copia.');};
+  reader.readAsText(file,'utf-8');
 });
 window.addEventListener('load', cargarExcelGuardado);
 
@@ -620,6 +612,7 @@ function openModal(title, text) {
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
 
 function parseWorkbook(wb) {
+  Clinical.load(wb);
   DATA.specialties = []; DATA.analytics = []; DATA.poliza = ''; DATA.sanitas = null; DATA.medicacion = [];
   CELL_STORE.length = 0;
   wb.SheetNames.forEach(name => {
@@ -697,6 +690,7 @@ function renderDashboard() {
   let menuH = '';
   menuH += '<div class="menu-item" onclick="activateTab(\'buscador\')"><span class="ico">🔎</span> Buscar</div>';
   menuH += '<div class="menu-item" onclick="activateTab(\'medicacion\')"><span class="ico">💊</span> Medicación</div>';
+  menuH += '<div class="menu-item" onclick="activateTab(\'tension\')"><span class="ico">♥</span> Tensión arterial</div>';
   menuH += '<div class="menu-item" onclick="activateTab(\'resumen\')"><span class="ico">📊</span> Resumen</div>';
   menuH += '<div class="menu-item" onclick="Alarms.showSettings()"><span class="ico">🔔</span> Avisos de citas</div>';
   menuH += '<button type="button" class="menu-item" onclick="actualizarApp()" style="width:100%;background:none;border:0;color:inherit;font:inherit;text-align:left"><span class="ico">↻</span> Actualizar</button>';
@@ -802,6 +796,7 @@ function renderDashboard() {
 
   // ===== Panel Medicación =====
   H += '<div class="panel" id="panel_medicacion">' + buildMedicacionHTML() + '</div>';
+  H += '<div class="panel" id="panel_tension">' + Clinical.panel() + '</div>';
 
   // ===== Panel Buscador global =====
   H += '<div class="panel" id="panel_buscador">'
@@ -822,6 +817,7 @@ function renderDashboard() {
   });
 
   renderCitasPendientes();
+  Clinical.render();
 }
 
 // ===== MEDICACIÓN =====
@@ -841,8 +837,64 @@ function medEstado(m) {
   } catch (e) {}
   return { tomando, fin };
 }
+function medEstadoExcel(m) {
+  const tom = norm(m['¿Tomando?']);
+  let fin = m['Fecha Fin'];
+  if (fin instanceof Date) fin = fin.getFullYear() + '-' + String(fin.getMonth()+1).padStart(2,'0') + '-' + String(fin.getDate()).padStart(2,'0');
+  return { tomando: ['si','true','1'].includes(tom), fin: String(fin || '') };
+}
+function medCambiosExcel(wb) {
+  const ws = wb.Sheets['Medicación Actual'];
+  if (!ws) return [];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1,defval:''});
+  const headers = rows[1] || [], changes = [], seen = new Set();
+  if (!['Fármaco','Dosis','¿Tomando?','Fecha Fin'].every(h => headers.includes(h)))
+    throw new Error('Faltan columnas necesarias en Medicación Actual. No se ha importado el archivo.');
+  for (const row of rows.slice(2)) {
+    if (!row[0]) continue;
+    const m = {}; headers.forEach((h,i) => { m[h] = row[i] ?? ''; });
+    if (!norm(m['Fármaco']) || !['si','no','true','false','1','0'].includes(norm(m['¿Tomando?'])))
+      throw new Error('Hay un medicamento sin nombre o sin un estado Sí/No válido. Revisa el Excel.');
+    const key = medKey(m);
+    if (seen.has(key)) throw new Error('Hay medicamentos repetidos con el mismo nombre y dosis. Revisa el Excel.');
+    seen.add(key);
+    const raw = localStorage.getItem(key);
+    const existing = DATA.medicacion.find(x => medKey(x) === key);
+    if (raw === null && !existing) continue;
+    const previous = raw === null ? medEstado(existing) : JSON.parse(raw);
+    if (!previous || typeof previous.tomando !== 'boolean' || (previous.fin != null && typeof previous.fin !== 'string'))
+      throw new Error('El estado guardado de ' + m['Fármaco'] + ' no es válido. No se ha sobrescrito.');
+    const before = {tomando: previous.tomando, fin: previous.fin || ''}, after = medEstadoExcel(m);
+    if (before.tomando !== after.tomando || before.fin !== after.fin) changes.push({key,raw,m,before,after});
+  }
+  return changes;
+}
+function medDescribirCambio(change) {
+  const describe = e => (e.tomando ? 'Tomando: Sí' : 'Tomando: No') + '; fecha fin: ' + (e.fin || 'sin fecha');
+  return fmt(change.m['Fármaco']) + ' ' + fmt(change.m['Dosis']) + '\nAntes: ' + describe(change.before) + '\nDespués: ' + describe(change.after);
+}
+function medGuardarCambios(changes, source) {
+  if (!changes.length) return () => {};
+  const auditKey = 'historial_med_aprobaciones_v1';
+  const oldAudit = localStorage.getItem(auditKey), log = JSON.parse(oldAudit || '[]');
+  if (!Array.isArray(log)) throw new Error('No se puede leer el registro de aprobaciones.');
+  for (const c of changes) if (localStorage.getItem(c.key) !== c.raw) throw new Error('La medicación ha cambiado durante la revisión. Vuelve a intentarlo.');
+  const restore = () => {
+    for (const c of changes) { if (c.raw === null) localStorage.removeItem(c.key); else localStorage.setItem(c.key,c.raw); }
+    if (oldAudit === null) localStorage.removeItem(auditKey); else localStorage.setItem(auditKey,oldAudit);
+  };
+  try {
+    log.push({at:new Date().toISOString(),source,changes:changes.map(c=>({farmaco:c.m['Fármaco'],dosis:c.m['Dosis'],before:c.before,after:c.after}))});
+    localStorage.setItem(auditKey,JSON.stringify(log));
+    for (const c of changes) localStorage.setItem(c.key,JSON.stringify(c.after));
+  } catch (error) { restore(); throw error; }
+  return restore;
+}
 function setMedEstado(m, tomando, fin) {
-  try { localStorage.setItem(medKey(m), JSON.stringify({ tomando, fin })); } catch (e) {}
+  const change = {key:medKey(m),raw:localStorage.getItem(medKey(m)),m,before:medEstado(m),after:{tomando,fin}};
+  if (change.before.tomando === tomando && change.before.fin === fin) return;
+  if (!window.confirm(medDescribirCambio(change) + '\n\n¿Apruebas guardar este cambio en el móvil?')) return;
+  medGuardarCambios([change],'Edición manual aprobada');
 }
 
 function buildMedicacionHTML() {
@@ -850,6 +902,7 @@ function buildMedicacionHTML() {
     return '<div class="empty-state"><div class="icon">💊</div><p>No hay hoja «Medicación Actual» en el Excel.<br>Cuando la incluya, aquí verás tu medicación y suplementos.</p></div>';
   }
   let h = '';
+  h += '<div class="clinical-tools">Los cambios requieren tu aprobación. Se guardan en este dispositivo y se incluyen en «Exportar datos». <button onclick="Clinical.medHistory()">Ver aprobaciones</button></div>';
   h += '<div class="med-toolbar"><div class="med-seg" id="medSeg">'
      + '<button class="on" onclick="setMedSeg(this,\'todas\')">Todas</button>'
      + '<button onclick="setMedSeg(this,\'tomando\')">Tomando ahora</button>'
@@ -902,8 +955,16 @@ function renderMedBody() {
   });
   tb.innerHTML = html || '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:24px">Sin resultados con los filtros aplicados.</td></tr>';
 }
-function medToggle(i, v) { const m = DATA.medicacion[i]; const e = medEstado(m); setMedEstado(m, v, e.fin); renderMedBody(); }
-function medSetFin(i, v) { const m = DATA.medicacion[i]; const e = medEstado(m); setMedEstado(m, v ? false : e.tomando, v); renderMedBody(); }
+function medToggle(i, v) {
+  try { if (!MED_IMPORT_BUSY) { const m = DATA.medicacion[i]; const e = medEstado(m); setMedEstado(m, v, e.fin); } }
+  catch (error) { mostrarToast('⚠ No se guardó el cambio: ' + error.message); }
+  finally { renderMedBody(); }
+}
+function medSetFin(i, v) {
+  try { if (!MED_IMPORT_BUSY) { const m = DATA.medicacion[i]; const e = medEstado(m); setMedEstado(m, v ? false : e.tomando, v); } }
+  catch (error) { mostrarToast('⚠ No se guardó el cambio: ' + error.message); }
+  finally { renderMedBody(); }
+}
 
 // ===== BUSCADOR GLOBAL =====
 const GLOBAL_DOCS = [];
@@ -1028,44 +1089,8 @@ function cargarCopiaDesdeMenu() {
   input.value = '';
   input.click();
 }
-function descargarExcel() {
-  closeMenu();
-  abrirDB().then(db => {
-    const tx = db.transaction(DB_STORE, 'readonly');
-    const req = tx.objectStore(DB_STORE).get(DB_KEY);
-    req.onsuccess = e => {
-      const buf = e.target.result;
-      if (!buf) { mostrarToast('⚠️ No hay ningún Excel guardado. Usa «Cargar Excel» primero.'); return; }
-      const hoy = new Date();
-      const nombre = 'Médico ' + hoy.getDate() + '-' + (hoy.getMonth() + 1) + '-' + String(hoy.getFullYear()).slice(2) + '.xlsx';
-      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      mostrarToast('✓ Descargado «' + nombre + '» — es el Excel que tiene el dashboard');
-    };
-    req.onerror = () => mostrarToast('⚠️ No se pudo leer el Excel guardado.');
-  }).catch(() => mostrarToast('⚠️ No se pudo abrir el almacenamiento local.'));
-}
-
-function exportarDatos() {
-  closeMenu();
-  const meds = DATA.medicacion.map(m => { const e = medEstado(m); return { farmaco: fmt(m['Fármaco']), dosis: fmt(m['Dosis']), tomando: e.tomando, fin: e.fin }; });
-  const notas = {};
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.indexOf('nota__') === 0) notas[k] = localStorage.getItem(k);
-    }
-  } catch (e) {}
-  const payload = { proyecto: 'Gestor médico', exportado: new Date().toISOString(), medicacion: meds, citas_comentarios: notas };
-  const hoy = new Date();
-  const nombre = 'Gestor médico ' + hoy.getDate() + '-' + (hoy.getMonth() + 1) + '-' + String(hoy.getFullYear()).slice(2) + '.json';
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-  mostrarToast('✓ Exportado como “' + nombre + '” — guárdalo y súbelo cuando pidas una actualización');
-}
+function descargarExcel() { return ClinicalExcel.download(); }
+function exportarDatos() { return Clinical.exportBackup(); }
 function mostrarToast(msg) {
   let t = document.getElementById('toast');
   if (!t) { t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; document.body.appendChild(t); }
@@ -1119,6 +1144,7 @@ function closeMenu() {
 let actualizacionEnCurso = false;
 async function actualizarApp() {
   if (actualizacionEnCurso) return;
+  if (MED_IMPORT_BUSY || Clinical.editorOpen()) { mostrarToast('Termina o cancela la edición antes de actualizar.'); return; }
   actualizacionEnCurso = true;
   document.activeElement?.blur();
   closeMenu();
@@ -1181,6 +1207,7 @@ function activateTab(target, skipHist) {
   document.querySelectorAll('.panel').forEach(p => { p.classList.toggle('active', p.id === 'panel_' + target); });
   showView('secciones');
   if (target === 'medicacion') renderMedBody();
+  if (target === 'tension') Clinical.render();
   if (target === 'buscador') buscarGlobal(document.getElementById('globalSearch') ? document.getElementById('globalSearch').value : '');
   if (!skipHist) pushHist({ view: 'secciones', panel: target });
   closeMenu();
@@ -1275,7 +1302,7 @@ function ajustarComentario(el) {
 }
 
 function setNota(especialidad, fecha, value) {
-  try { localStorage.setItem(notaKey(especialidad, fecha), value); } catch(e) {}
+  localStorage.setItem(notaKey(especialidad, fecha), value);
 }
 
 window.addEventListener('resize', () => document.querySelectorAll('.cita-nota').forEach(ajustarComentario));
@@ -1398,7 +1425,16 @@ function renderCitasPendientes() {
   panel.innerHTML = H;
   panel.querySelectorAll('.cita-nota').forEach(input => {
     ['click','touchstart','mousedown'].forEach(eventName => input.addEventListener(eventName, event => event.stopPropagation()));
-    input.addEventListener('input', () => { setNota(input.dataset.especialidad, input.dataset.fecha, input.value); ajustarComentario(input); });
+    let approvedValue = input.value;
+    input.addEventListener('input', () => ajustarComentario(input));
+    input.addEventListener('change', () => {
+      if (input.value === approvedValue) return;
+      try {
+        if (MED_IMPORT_BUSY || !confirm('Comentario de '+input.dataset.especialidad+' · '+input.dataset.fecha+'\n\nAntes: '+(approvedValue||'(vacío)')+'\nDespués: '+(input.value||'(vacío)')+'\n\n¿Apruebas guardar este cambio?')) { input.value=approvedValue; return; }
+        setNota(input.dataset.especialidad, input.dataset.fecha, input.value); approvedValue=input.value;
+      } catch(e) { input.value=approvedValue; mostrarToast('No se pudo guardar el comentario.'); }
+      finally { ajustarComentario(input); }
+    });
     ajustarComentario(input);
   });
   if (window.Alarms) Alarms.attach(citas);
@@ -1412,9 +1448,12 @@ function renderCitasPendientes() {
 </script>
 
 <script src="alarms-config.js"></script>
+<script src="clinical.js?v=20261106-18"></script>
+<script src="jszip.min.js"></script>
+<script src="clinical-excel.js?v=20261106-18"></script>
 <script src="alarms-core.js"></script>
 <script src="binding-store.js?v=20261028-14"></script>
-<script src="alarms.js?v=20261030-17"></script>
+<script src="alarms.js?v=20261106-18"></script>
 <script>
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.protocol === 'http:')) {
   window.addEventListener('load', () => {
