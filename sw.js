@@ -1,22 +1,23 @@
 // Restore JSON support - 2026-09-26
 importScripts('./binding-store.js?v=20261028-14');
-const CACHE = 'historial-v18-tension-medicacion';
+const CACHE = 'historial-v19-fotos-tension';
 const XLSX_SCRIPT = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const APP_SHELL = [
   XLSX_SCRIPT,
   './',
   './index.html',
-  './clinical.js?v=20261106-18',
-  './clinical.css?v=20261106-18',
+  './clinical.js?v=20261106-19',
+  './clinical-photos.js?v=20261106-19',
+  './clinical.css?v=20261106-19',
   './jszip.min.js',
-  './clinical-excel.js?v=20261106-18',
+  './clinical-excel.js?v=20261106-19',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
   './alarms-config.js',
   './alarms-core.js',
   './binding-store.js?v=20261028-14',
-  './alarms.js?v=20261106-18',
+  './alarms.js?v=20261106-19',
   './alarms.css?v=20261030-17'
 ];
 
