@@ -1,29 +1,29 @@
 // Restore JSON support - 2026-09-26
 importScripts('./binding-store.js?v=20261028-14');
-const CACHE = 'historial-v20-lectura-tension';
+const CACHE = 'historial-v21-nombre-informe';
 const XLSX_SCRIPT = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const APP_SHELL = [
   XLSX_SCRIPT,
   './',
   './index.html',
-  './clinical.js?v=20261107-20',
-  './clinical-photos.js?v=20261107-20',
-  './clinical-ocr.js?v=20261107-20',
-  './bp-ocr-worker.js?v=20261107-20',
+  './clinical.js?v=20261107-21',
+  './clinical-photos.js?v=20261107-21',
+  './clinical-ocr.js?v=20261107-21',
+  './bp-ocr-worker.js?v=20261107-21',
   './ocr-vendor/tesseract.min.js',
   './ocr-vendor/worker.min.js',
   './ocr-vendor/tesseract-core-lstm.wasm.js',
   './ocr-vendor/ssd_int.traineddata',
-  './clinical.css?v=20261107-20',
+  './clinical.css?v=20261107-21',
   './jszip.min.js',
-  './clinical-excel.js?v=20261107-20',
+  './clinical-excel.js?v=20261107-21',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
   './alarms-config.js',
   './alarms-core.js',
   './binding-store.js?v=20261028-14',
-  './alarms.js?v=20261107-20',
+  './alarms.js?v=20261107-21',
   './alarms.css?v=20261030-17'
 ];
 

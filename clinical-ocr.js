@@ -2,7 +2,7 @@
 window.ClinicalOCR = (() => {
   'use strict';
   const base=new URL('./ocr-vendor/',document.currentScript.src),scriptURL=new URL('tesseract.min.js',base).href;
-  const detectorURL=new URL('./bp-ocr-worker.js?v=20261107-20',document.currentScript.src).href;
+  const detectorURL=new URL('./bp-ocr-worker.js?v=20261107-21',document.currentScript.src).href;
   let library=null;
   function load(){if(window.Tesseract)return Promise.resolve();if(library)return library;library=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=scriptURL;s.onload=resolve;s.onerror=()=>{library=null;s.remove();reject(Error('No se pudo cargar el lector. Conecta a Internet y pulsa Actualizar.'));};document.head.append(s);});return library;}
   const unclear=()=>Error('No he podido leer las tres cifras con suficiente claridad. Haz otra foto de frente, con toda la pantalla y sin reflejos. También puedes introducirlas manualmente.');
