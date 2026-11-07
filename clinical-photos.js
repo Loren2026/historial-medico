@@ -39,9 +39,10 @@ window.ClinicalPhotos = (() => {
     }return assets;
   }
   function image(data,name){const img=document.createElement('img');img.className='clinical-photo';img.src=data;img.alt=name||'Foto de la medición';return img;}
+  const previews=new WeakMap();
   async function preview(container,photo,assets=[]){
-    container.replaceChildren();if(!photo)return;
-    const data=assets.find(a=>a.id===photo.id)?.data||await get(photo.id);if(!data)throw Error('No se encuentra la foto guardada.');
+    const request=Symbol();previews.set(container,request);container.replaceChildren();if(!photo)return;
+    const data=assets.find(a=>a.id===photo.id)?.data||await get(photo.id);if(previews.get(container)!==request)return;if(!data)throw Error('No se encuentra la foto guardada.');
     const label=document.createElement('p');label.textContent=photo.name;container.append(label,image(data,photo.name));
   }
   async function view(photo){try{const d=document.createElement('dialog');d.className='clinical-dialog clinical-photo-view';d.setAttribute('aria-label','Foto de la toma');const title=document.createElement('h2');title.textContent='Foto de la toma';const content=document.createElement('div');await preview(content,photo);const close=document.createElement('button');close.textContent='Cerrar';close.onclick=()=>d.close();d.onclose=()=>d.remove();d.append(title,close,content);document.body.append(d);d.showModal();}catch(e){mostrarToast(e.message);}}

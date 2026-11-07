@@ -74,18 +74,36 @@ window.Clinical = (() => {
     const d=document.createElement('dialog');d.className='clinical-dialog';d.setAttribute('aria-label',r?'Corregir toma':'Nueva toma');
     d.innerHTML='<h2>'+(r?'Corregir toma':'Nueva toma')+'</h2><p>Usa la fecha real. La hora puede quedar sin confirmar.</p><form><div class="clinical-grid"><label>Fecha<input name="date" type="date" required></label><label>Hora (opcional)<input name="time" type="time"></label></div><div class="clinical-grid"><label>Máxima (mmHg)<input name="sys" type="number" inputmode="numeric" min="1" max="999" step="1" required></label><label>Mínima (mmHg)<input name="dia" type="number" inputmode="numeric" min="1" max="999" step="1" required></label></div><label>Pulso (lpm)<input name="pulse" type="number" inputmode="numeric" min="1" max="999" step="1" required></label><label>Observaciones<textarea name="note" rows="3" maxlength="10000"></textarea></label><p role="alert" id="bp-error"></p><div class="clinical-actions"><button type="button" data-cancel>Cancelar</button><button type="submit" class="primary">Revisar antes de guardar</button></div></form>';
     if(r)for(const k of ['date','time','sys','dia','pulse','note'])d.querySelector('[name='+k+']').value=r[k];
-    let photo=r?.photo||null,asset=null,photoBusy=false;
+    let photo=r?.photo||null,asset=null,photoBusy=false,ocrJob=null,ocrUsed=false;
     const photoBox=document.createElement('section');photoBox.className='clinical-photo-editor';
-    photoBox.innerHTML='<h3>Foto de la medición (opcional)</h3><p class="clinical-muted">Puedes elegir una foto o usar la cámara. Se guarda una copia optimizada en este dispositivo; el original no se modifica. Revisa e introduce tú los valores y la fecha.</p><div class="clinical-actions"><button type="button" data-gallery>📷 Subir foto</button><button type="button" data-camera>Hacer foto</button><button type="button" data-remove-photo>Quitar foto</button></div><input type="file" accept="image/jpeg,image/png,image/webp" data-photo-file hidden><input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-photo-camera hidden><div data-photo-preview></div><p class="clinical-muted">Las fotos van en «Exportar copia» (JSON). El Excel y la impresión contienen los valores, sin imágenes.</p>';
+    photoBox.innerHTML='<h3>Leer una foto del tensiómetro</h3><p class="clinical-muted">Sube la foto o usa la cámara para rellenar máxima, mínima y pulso. Fotografía la pantalla de frente, en vertical y sin reflejos. La lectura se hace en este dispositivo; la foto no se envía a ningún servicio. Comprueba las cifras antes de aprobar.</p><div class="clinical-actions"><button type="button" data-gallery>📷 Subir foto y leer</button><button type="button" data-camera>Hacer foto</button><button type="button" data-remove-photo>Quitar foto</button></div><input type="file" accept="image/jpeg,image/png,image/webp" data-photo-file hidden><input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-photo-camera hidden><p data-ocr-status role="status" aria-live="polite"></p><div data-photo-preview></div><p class="clinical-muted">Las fotos van en «Exportar copia» (JSON). El Excel y la impresión contienen los valores, sin imágenes.</p>';
     d.querySelector('form').prepend(photoBox);
     const preview=photoBox.querySelector('[data-photo-preview]'),submit=d.querySelector('[type=submit]');
     function photoControls(busy){photoBusy=busy;submit.disabled=busy;photoBox.querySelectorAll('button').forEach(b=>b.disabled=busy);photoBox.querySelector('[data-remove-photo]').hidden=!photo;}
-    async function refreshPhoto(){photoControls(true);try{await ClinicalPhotos.preview(preview,photo,asset?[asset]:[]);}catch(e){d.querySelector('#bp-error').textContent=e.message;}finally{photoControls(false);}}
+    async function refreshPhoto(){photoControls(true);try{await ClinicalPhotos.preview(preview,photo,asset?[asset]:[]);}catch(e){d.querySelector('#bp-error').textContent=e.message;}finally{if(!ocrJob)photoControls(false);}}
     photoBox.querySelector('[data-gallery]').onclick=()=>photoBox.querySelector('[data-photo-file]').click();
     photoBox.querySelector('[data-camera]').onclick=()=>photoBox.querySelector('[data-photo-camera]').click();
-    for(const input of photoBox.querySelectorAll('input'))input.onchange=async()=>{if(!input.files[0])return;photoControls(true);d.querySelector('#bp-error').textContent='Preparando foto…';try{const next=await ClinicalPhotos.prepare(input.files[0]);if(!d.isConnected)return;photo=next.photo;asset=next.asset;await ClinicalPhotos.preview(preview,photo,[asset]);d.querySelector('#bp-error').textContent='';}catch(e){d.querySelector('#bp-error').textContent=e.message;}finally{input.value='';photoControls(false);}};
-    photoBox.querySelector('[data-remove-photo]').onclick=()=>{photo=null;asset=null;d.querySelector('#bp-error').textContent='';refreshPhoto();};
-    const close=()=>{editorOpen=false;d.close();d.remove()};d.querySelector('[data-cancel]').onclick=close;d.oncancel=e=>{e.preventDefault();close()};
+    const status=photoBox.querySelector('[data-ocr-status]');
+    const dateField=d.querySelector('[name=date]'),timeField=d.querySelector('[name=time]');
+    const localDate=n=>n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
+    const quickDate=document.createElement('div');quickDate.className='clinical-actions';quickDate.innerHTML='<button type="button" data-today>Hoy</button><button type="button" data-yesterday>Ayer</button>';
+    dateField.parentElement.append(quickDate);quickDate.querySelector('[data-today]').onclick=()=>{dateField.value=localDate(new Date())};quickDate.querySelector('[data-yesterday]').onclick=()=>{const n=new Date();n.setDate(n.getDate()-1);dateField.value=localDate(n)};
+    if(!r){dateField.value=localDate(new Date());d.querySelector('h2+p').textContent='Fecha propuesta: hoy. Si la foto es de otro día, elige la fecha real. La hora puede quedar sin confirmar; no se copia el reloj del aparato.';}
+    for(const input of photoBox.querySelectorAll('input'))input.onchange=async()=>{
+      if(!input.files[0])return;photoControls(true);ocrJob=new AbortController();const job=ocrJob;
+      d.querySelector('#bp-error').textContent='';status.textContent='Preparando foto…';
+      try{const next=await ClinicalPhotos.prepare(input.files[0]);if(!d.isConnected)return;photo=next.photo;asset=next.asset;await ClinicalPhotos.preview(preview,photo,[asset]);
+        // A replacement photo must never retain a previous automatic draft as its reading.
+        if(ocrUsed){for(const k of ['sys','dia','pulse'])d.querySelector('[name='+k+']').value=r?r[k]:'';}ocrUsed=false;
+        const values=await ClinicalOCR.read(input.files[0],{signal:job.signal,onProgress:text=>{if(d.isConnected)status.textContent=text;}});
+        if(!d.isConnected||job.signal.aborted)return;
+        for(const k of ['sys','dia','pulse'])d.querySelector('[name='+k+']').value=values[k];ocrUsed=true;
+        if(!r&&input.hasAttribute('data-photo-camera')){const now=new Date();dateField.value=localDate(now);timeField.value=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');}
+        status.textContent='Lectura propuesta: '+values.sys+'/'+values.dia+' mmHg · Pulso '+values.pulse+' lpm. Comprueba la foto, la fecha y la hora. Todavía no se ha guardado.';
+      }catch(e){if(d.isConnected&&!job.signal.aborted){status.textContent=e.message+(r?' Se mantienen los valores anteriores de esta toma.':'');}}finally{input.value='';if(ocrJob===job)ocrJob=null;if(d.isConnected)photoControls(false);}
+    };
+    photoBox.querySelector('[data-remove-photo]').onclick=()=>{photo=null;asset=null;if(ocrUsed){for(const k of ['sys','dia','pulse'])d.querySelector('[name='+k+']').value=r?r[k]:'';}ocrUsed=false;status.textContent='';d.querySelector('#bp-error').textContent='';refreshPhoto();};
+    const close=()=>{ocrJob?.abort();editorOpen=false;d.close();d.remove()};d.querySelector('[data-cancel]').onclick=close;d.oncancel=e=>{e.preventDefault();close()};
     d.querySelector('form').onsubmit=async e=>{e.preventDefault();if(MED_IMPORT_BUSY||photoBusy)return;const btn=d.querySelector('[type=submit]');btn.disabled=true;MED_IMPORT_BUSY=true;
       try{const o=Object.fromEntries(new FormData(e.target));const after=validRecord({...o,...(photo||r?.photo?{photo}:{}),id:r?.id||uid(),sys:Number(o.sys),dia:Number(o.dia),pulse:Number(o.pulse),source:r?.source||'Introducida y aprobada por Loren en la app'});const p=plan([after]);
       if(!p.changes.length){mostrarToast('No hay cambios que guardar.');return;}
@@ -95,7 +113,7 @@ window.Clinical = (() => {
       const photoChange=r?.photo&&r.photo.id!==photo?.id?(photo?'\n\nSe sustituirá la foto de esta toma.':'\n\nSe quitará la foto de esta toma.'):'';
       if(!await approve('Aprobar '+(r?'corrección':'nueva toma'),details(p)+photoChange+'\n\nSe guardará en este dispositivo. Se conservará el valor anterior en el historial de aprobaciones.',images))return;
       if(asset)await ClinicalPhotos.put([asset]);
-      commit(p,r?'Corrección aprobada en la app':'Nueva toma aprobada en la app');close();render();mostrarToast('✓ Toma guardada en este dispositivo. Exporta la copia para conservarla fuera del móvil.');
+      commit(p,(r?'Corrección aprobada en la app':'Nueva toma aprobada en la app')+(ocrUsed?' · Lectura de foto revisada':''));close();render();mostrarToast('✓ Toma guardada en este dispositivo. Exporta la copia para conservarla fuera del móvil.');
       }catch(error){d.querySelector('#bp-error').textContent=error.message;}finally{MED_IMPORT_BUSY=false;btn.disabled=false;}
     };document.body.append(d);d.showModal();refreshPhoto();
   }

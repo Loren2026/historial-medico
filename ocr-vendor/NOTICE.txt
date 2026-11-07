@@ -1,0 +1,23 @@
+Device-local OCR dependencies, bundled 2026-11-07.
+No medical photos or records are included in these assets.
+
+Tesseract.js 6.0.1 (Apache-2.0)
+https://github.com/naptha/tesseract.js/tree/v6.0.1
+dist/tesseract.min.js, dist/worker.min.js
+Downloaded from cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/
+License: TESSERACT-JS-LICENSE.txt
+
+Tesseract.js-core 6.0.0 (Apache-2.0)
+https://github.com/naptha/tesseract.js-core/tree/v6.0.0
+tesseract-core-lstm.wasm.js (embedded WebAssembly)
+Downloaded from cdn.jsdelivr.net/npm/tesseract.js-core@6.0.0/
+License: TESSERACT-CORE-LICENSE.txt
+
+Seven-segment integer model ssd_int.traineddata (Apache-2.0)
+https://github.com/Shreeshrii/tessdata_ssd
+Commit e493a10a4bf81632506cf24ba99d83854afff9f6
+License: SSD-LICENSE.txt
+
+The model recognizes seven-segment displays, not arbitrary handwritten values.
+The application requests user review before saving any reading. Recognition
+can fail on glare, shadows, unusual layouts, rotation or poor image quality.
