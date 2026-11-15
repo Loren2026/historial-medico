@@ -1,6 +1,6 @@
 // Restore JSON support - 2026-09-26
 importScripts('./binding-store.js?v=20261028-14');
-const CACHE = 'historial-v21-nombre-informe';
+const CACHE = 'historial-v22-avisos-familiares';
 const XLSX_SCRIPT = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const APP_SHELL = [
   XLSX_SCRIPT,
@@ -23,7 +23,12 @@ const APP_SHELL = [
   './alarms-config.js',
   './alarms-core.js',
   './binding-store.js?v=20261028-14',
-  './alarms.js?v=20261107-21',
+  './alarms.js?v=20261115-22',
+  './family.html',
+  './family-sw.js',
+  './family-manifest.json',
+  './family.js?v=20261115-22',
+  './family.css?v=20261115-22',
   './alarms.css?v=20261030-17'
 ];
 
@@ -63,16 +68,17 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin && url.href !== XLSX_SCRIPT) return;
 
   if (request.mode === 'navigate') {
+    const navigationFile = url.pathname === new URL('./family.html', self.registration.scope).pathname ? './family.html' : './index.html';
     event.respondWith(
       fetch(request)
         .then(response => {
           if (response.ok) {
             const copy = response.clone();
-            caches.open(CACHE).then(cache => cache.put('./index.html', copy));
+            caches.open(CACHE).then(cache => cache.put(navigationFile, copy));
           }
           return response;
         })
-        .catch(async () => (await caches.match('./index.html')) || (await caches.match('./')))
+        .catch(async () => (await caches.match(navigationFile)) || (await caches.match('./')))
     );
     return;
   }
@@ -111,15 +117,17 @@ self.addEventListener('push', event => {
     body, icon: './icon-192.png', badge: './icon-192.png',
     tag: typeof message.tag === 'string' ? message.tag.slice(0, 100) : 'cita-medica',
     renotify: false, silent: false, vibrate: [250, 120, 250],
-    data: { url: self.registration.scope }
+    data: { url: message.family === true ? new URL('./family.html', self.registration.scope).href : self.registration.scope }
   }));
 });
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const existing = windows.find(client => client.url.startsWith(self.registration.scope));
-    if (existing) { await existing.focus(); existing.postMessage({ type: 'OPEN_APPOINTMENTS' }); }
-    else await self.clients.openWindow(self.registration.scope);
+    const familyUrl = new URL('./family.html',self.registration.scope).href;
+    const target = event.notification.data?.url === familyUrl ? familyUrl : self.registration.scope;
+    const existing = windows.find(client => target===familyUrl ? client.url.split('#')[0]===familyUrl : client.url.startsWith(self.registration.scope)&&!client.url.includes('/family.html'));
+    if (existing) { await existing.focus(); if(target!==familyUrl)existing.postMessage({ type: 'OPEN_APPOINTMENTS' }); }
+    else await self.clients.openWindow(target);
   })());
 });

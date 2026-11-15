@@ -693,6 +693,7 @@ function renderDashboard() {
   menuH += '<div class="menu-item" onclick="activateTab(\'tension\')"><span class="ico">♥</span> Tensión arterial</div>';
   menuH += '<div class="menu-item" onclick="activateTab(\'resumen\')"><span class="ico">📊</span> Resumen</div>';
   menuH += '<div class="menu-item" onclick="Alarms.showSettings()"><span class="ico">🔔</span> Avisos de citas</div>';
+  menuH += '<button type="button" class="menu-item" onclick="FamilySharing.show()" style="width:100%;background:none;border:0;color:inherit;font:inherit;text-align:left"><span class="ico">👥</span> Compartir avisos</button>';
   menuH += '<button type="button" class="menu-item" onclick="actualizarApp()" style="width:100%;background:none;border:0;color:inherit;font:inherit;text-align:left"><span class="ico">↻</span> Actualizar</button>';
   if (DATA.sanitas) menuH += '<div class="menu-item" onclick="activateTab(\'sanitas\')"><span class="ico">🏥</span> Datos Sanitas</div>';
   menuH += '<div class="menu-item" onclick="activateTab(\'analiticas\')"><span class="ico">🔬</span> Analíticas</div>';
@@ -1455,7 +1456,9 @@ function renderCitasPendientes() {
 <script src="clinical-excel.js?v=20261107-21"></script>
 <script src="alarms-core.js"></script>
 <script src="binding-store.js?v=20261028-14"></script>
-<script src="alarms.js?v=20261107-21"></script>
+<link rel="stylesheet" href="family.css?v=20261115-22">
+<script src="alarms.js?v=20261115-22"></script>
+<script src="family.js?v=20261115-22"></script>
 <script>
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.protocol === 'http:')) {
   window.addEventListener('load', () => {
