@@ -16,7 +16,7 @@
     if (!Array.isArray(values) || values.length > 10 || values.some(n => !Number.isInteger(n) || n < 1 || n > 43200)) throw Error('Elige entre 1 minuto y 30 días, hasta 10 avisos.');
     return [...new Set(values)].sort((a, b) => b - a);
   }
-  function key(cita) { return JSON.stringify([cita.especialidad, cita.fechaCorta]); }
+  function key(cita) { return JSON.stringify([cita.especialidad, cita.fechaCorta, cita.centro || '', cita.medico || '']); }
   function label(minutes) {
     if (minutes % 1440 === 0) return minutes / 1440 + ' día' + (minutes === 1440 ? '' : 's') + ' antes';
     if (minutes % 60 === 0) return minutes / 60 + ' hora' + (minutes === 60 ? '' : 's') + ' antes';

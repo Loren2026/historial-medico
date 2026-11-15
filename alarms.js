@@ -8,7 +8,7 @@
   try {
     saved = JSON.parse(localStorage.getItem(KEY) || '{}');
     if (!saved || typeof saved !== 'object' || Array.isArray(saved)) throw Error();
-    for (const item of Object.values(saved)) { if (!item || typeof item.id !== 'string') throw Error(); AlarmCore.offsets(item.offsets); }
+    for (const item of Object.values(saved)) { if (!item || typeof item.id !== 'string') throw Error(); item.offsets=AlarmCore.offsets(item.offsets).filter(n=>n!==30&&n!==60); }
   }
   catch { saved = {}; storageOK = false; status = 'No se pueden leer los avisos guardados. No se enviarán cambios.'; }
   const dialog = document.createElement('dialog');
@@ -65,7 +65,7 @@
       const registration=await navigator.serviceWorker.getRegistration(),sub=await registration?.pushManager.getSubscription();
       let http='Sin credencial';const value=localStorage.getItem(TOKEN)||backup?.token;
       if(value&&configured()){try{http=(await fetch(config.apiUrl+'/status',{cache:'no-store',headers:{Authorization:'Bearer '+value},signal:AbortSignal.timeout(10000)})).status;}catch(_){http='Sin respuesta';}}
-      const info={version:'15-11-2026 · 22',origen:location.origin,modo:matchMedia('(display-mode: standalone)').matches?'App instalada':'Navegador',configurada:configured(),credencialLocal:!!localStorage.getItem(TOKEN),copiaDeConexion:!!backup?.token,suscripcion:!!sub,permiso:typeof Notification==='undefined'?'No disponible':Notification.permission,respuestaServicio:http,preferenciasLocales:!!localStorage.getItem(KEY),antesDeActualizar:previous||'Sin registro anterior',alAbrirLaApp:lastLoad||'Sin registro'};
+      const info={version:'15-11-2026 · 23',origen:location.origin,modo:matchMedia('(display-mode: standalone)').matches?'App instalada':'Navegador',configurada:configured(),credencialLocal:!!localStorage.getItem(TOKEN),copiaDeConexion:!!backup?.token,suscripcion:!!sub,permiso:typeof Notification==='undefined'?'No disponible':Notification.permission,respuestaServicio:http,preferenciasLocales:!!localStorage.getItem(KEY),antesDeActualizar:previous||'Sin registro anterior',alAbrirLaApp:lastLoad||'Sin registro'};
       const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font:inherit';pre.textContent=JSON.stringify(info,null,2);dialog.append(pre);
     }catch(error){paragraph(error.message);}
     button('Volver',()=>showSettings());open();
@@ -120,6 +120,14 @@
     remoteLoading = restoreRemote().finally(() => { remoteLoading=null; });
     return remoteLoading;
   }
+  const cleanText=value=>String(value||'').replace(/\s+/g,' ').trim();
+  const calendarDay=c=>{const ms=AlarmCore.madridDate(c.fechaCorta);return ms?new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Madrid',year:'numeric',month:'2-digit',day:'2-digit'}).format(ms):'';};
+  function groupFor(cita){
+    const center=cleanText(cita.centro).normalize('NFC').toLocaleLowerCase('es'),day=calendarDay(cita);
+    if(!center||/^(?:[-–—]|no (?:consta|informado|indicado))$/.test(center))return [cita];
+    return appointments.filter(c=>AlarmCore.madridDate(c.fechaCorta)>Date.now()&&calendarDay(c)===day&&cleanText(c.centro).normalize('NFC').toLocaleLowerCase('es')===center);
+  }
+  const groupOffsets=c=>[...new Set(groupFor(c).flatMap(x=>saved[AlarmCore.key(x)]?.offsets||[]))].filter(n=>n!==30&&n!==60).sort((a,b)=>b-a);
   async function restoreRemote() {
     if (!appointmentsReady) throw Error('Carga el historial vigente antes de sincronizar los avisos.');
     const data = await request('/status');
@@ -127,10 +135,11 @@
     const next = {}, matches = new Set();
     for (const item of data.reminders) {
       if (item.startsAt <= Date.now()) continue;
-      const candidates = appointments.filter(c => AlarmCore.madridDate(c.fechaCorta) === item.startsAt);
+      const exact=appointments.filter(c=>item.appointmentKey&&AlarmCore.key(c)===item.appointmentKey);
+      const candidates = exact.length===1?exact:appointments.filter(c => AlarmCore.madridDate(c.fechaCorta) === item.startsAt && (!item.specialty||c.especialidad===item.specialty));
       if (candidates.length !== 1 || matches.has(AlarmCore.key(candidates[0]))) throw Error('Hay citas programadas que no coinciden de forma única con el historial cargado. Carga el Excel vigente; se conservan los avisos del servidor.');
       const k=AlarmCore.key(candidates[0]); matches.add(k);
-      next[k]={id:item.id,offsets:AlarmCore.offsets(item.offsets)};
+      next[k]={id:item.id,offsets:AlarmCore.offsets(item.offsets).filter(n=>n!==30&&n!==60)};
     }
     for (const c of appointments) {
       const k=AlarmCore.key(c),startsAt=AlarmCore.madridDate(c.fechaCorta);
@@ -144,10 +153,10 @@
   async function showSettings(options={}) {
     try{await ensureBinding();}catch(error){status=error.message;}
     closeMenu(); shell('Avisos en este móvil');
-    paragraph('Elige los avisos desde el botón de cada cita. Llegarán como notificaciones de Historial Médico.');
+    paragraph('Los avisos reúnen las citas del mismo día y centro. La primera cita del grupo marca la hora de envío; se conservan los plazos elegidos salvo 30 minutos y 1 hora.');
     const p = paragraph(status, 'alarm-status'); p.dataset.alarmStatus = '';
     paragraph('El sonido lo controla el móvil. Revisa el volumen, No molestar y el permiso de notificaciones. Los avisos necesitan conexión y pueden retrasarse.', 'alarm-hint');
-    paragraph('La pantalla bloqueada mostrará solo «Cita médica» y su fecha y hora. No se enviarán informes, diagnósticos ni comentarios.', 'alarm-hint');
+    paragraph('Los avisos incluyen el nombre de Loren, las horas, los especialistas y el centro, también para las personas vinculadas. Pueden aparecer en la pantalla bloqueada. No incluyen informes, diagnósticos ni comentarios.', 'alarm-hint');
     button('Cómo cambiar sonido y tipo de aviso', () => soundHelp());
     button('Estado de la conexión',connectionDetails);
     if (!configured()) { paragraph('Servicio de avisos pendiente de activación. Puedes guardar tus preferencias, pero todavía no recibirás notificaciones.'); open(); return; }
@@ -189,12 +198,13 @@
     open();
   }
   function edit(cita) {
-    shell('Avisos de esta cita');
+    shell('Avisos del día y centro');
     paragraph(cita.especialidad + ' · ' + cita.fechaCorta + ' (hora de Madrid)');
-    const startsAt = AlarmCore.madridDate(cita.fechaCorta);
+    const members=groupFor(cita),startsAt=Math.min(...members.map(c=>AlarmCore.madridDate(c.fechaCorta)));
     if (!startsAt || startsAt <= Date.now()) { paragraph('Esta cita no tiene una fecha y hora futura inequívoca. Corrígela en el Excel antes de activar avisos.'); open(); return; }
-    const k = AlarmCore.key(cita), existing = saved[k];
-    const choices = [...new Set([10080, 4320, 1440, 120, 60, 30, ...(existing?.offsets || [])])].sort((a,b) => b-a);
+    const k = AlarmCore.key(cita), existing = {offsets:groupOffsets(cita)};
+    paragraph(members.length+' cita(s) en este grupo · '+(cleanText(cita.centro)||'Centro no informado')+'. Referencia: '+new Intl.DateTimeFormat('es-ES',{timeZone:'Europe/Madrid',hour:'2-digit',minute:'2-digit'}).format(startsAt)+'.');
+    const choices = [...new Set([10080, 4320, 1440, 120, ...(existing?.offsets || [])])].sort((a,b) => b-a);
     const grid = document.createElement('div'); grid.className = 'alarm-options'; dialog.append(grid);
     const addOption = (n, checked) => {
       const label = document.createElement('label'), input = document.createElement('input'); input.type = 'checkbox'; input.value = n; input.checked = checked;
@@ -207,32 +217,32 @@
     const unit = document.createElement('select'); unit.setAttribute('aria-label', 'Unidad de antelación'); [[60,'horas'],[1440,'días'],[1,'minutos']].forEach(([v,t]) => unit.add(new Option(t,v))); custom.append(unit);
     const message = paragraph('', 'alarm-status'); message.setAttribute('role', 'status');
     button('Añadir', () => { try {
-      const n = +amount.value * +unit.value; AlarmCore.offsets([n]);
+      const n = +amount.value * +unit.value; AlarmCore.offsets([n]); if(n===30||n===60)throw Error('Los avisos de 30 minutos y 1 hora están retirados.');
       if (startsAt - n * 60000 <= Date.now()) throw Error('Ese horario ya pasó. Elige menos antelación.');
       const input = [...grid.querySelectorAll('input')].find(x => +x.value === n); if (input) input.checked = true; else addOption(n, true); message.textContent = '';
     } catch(e) { message.textContent = e.message; } }, custom);
-    paragraph('Puedes ajustar cada cita. Los avisos cuyo plazo ya pasó no se envían. Las citas nuevas se preparan con 7, 3 y 1 día de antelación.', 'alarm-hint');
+    paragraph('Este cambio se aplica al grupo del mismo día y centro. Sus plazos se reúnen en un solo resumen por día de envío. Los plazos pasados no se vuelven a enviar; los días nuevos se preparan con 7, 3 y 1 día.', 'alarm-hint');
     const actions = document.createElement('div'); actions.className = 'alarm-actions'; dialog.append(actions);
     async function save(values) {
       if (!storageOK) { message.textContent = status; return; }
       try {
         if (configured() && token() && !remoteLoaded) { await loadRemote(); edit(cita); return; }
         const selected = AlarmCore.offsets(values);
-        if (selected.some(n => startsAt - n*60000 <= Date.now())) throw Error('Uno de los avisos ya pasó. Revisa la selección.');
-        const previous = saved[k];
-        saved[k] = { id: previous?.id || crypto.randomUUID(), offsets: selected };
-        try { persist(); } catch(e) { if(previous) saved[k]=previous; else delete saved[k]; throw Error('No se pudo guardar. No se ha enviado ningún cambio.'); }
+        if (selected.some(n => startsAt - n*60000 <= Date.now() && !existing.offsets.includes(n))) throw Error('Uno de los avisos ya pasó. Revisa la selección.');
+        const previous=structuredClone(saved);
+        for(const c of members){const mk=AlarmCore.key(c);saved[mk]={id:saved[mk]?.id||crypto.randomUUID(),offsets:selected};}
+        try { persist(); } catch(e) { saved=previous; throw Error('No se pudo guardar. No se ha enviado ningún cambio.'); }
         refreshButtons(); await sync(); message.textContent = status;
       } catch(e) { message.textContent = e.message; }
     }
-    button('Guardar avisos', () => save([...grid.querySelectorAll('input:checked:not(:disabled)')].map(x => +x.value)), actions, 'primary');
+    button('Guardar avisos', () => save([...grid.querySelectorAll('input:checked')].map(x => +x.value)), actions, 'primary');
     button('Quitar avisos', () => { grid.querySelectorAll('input').forEach(x => x.checked = false); return save([]); }, actions);
     button('Conectar / probar móvil', showSettings, actions);
     button('Cómo cambiar sonido y tipo de aviso', () => soundHelp(() => edit(cita)), actions);
     open();
   }
   function refreshButtons() {
-    document.querySelectorAll('[data-alarm-index]').forEach(b => { const c = appointments[+b.dataset.alarmIndex], item = c && saved[AlarmCore.key(c)]; b.textContent = item?.offsets.length ? '🔔 Avisos (' + item.offsets.length + ')' : '🔔 Elegir avisos'; });
+    document.querySelectorAll('[data-alarm-index]').forEach(b => { const c = appointments[+b.dataset.alarmIndex], item = c && {offsets:groupOffsets(c)}; b.textContent = item?.offsets.length ? '🔔 Avisos (' + item.offsets.length + ')' : '🔔 Elegir avisos'; });
   }
   async function sync() {
     const current = ++revision;
@@ -251,12 +261,12 @@
         const items = [];
         for (const c of appointments) {
           const pref = saved[AlarmCore.key(c)], startsAt = AlarmCore.madridDate(c.fechaCorta);
-          if (pref && startsAt > Date.now() && !items.some(x => x.id === pref.id)) items.push({ id: pref.id, startsAt, offsets: AlarmCore.offsets(pref.offsets) });
+          if (pref && startsAt > Date.now() && !items.some(x => x.id === pref.id)) items.push({ id: pref.id, startsAt, offsets: AlarmCore.offsets(pref.offsets).filter(n=>n!==30&&n!==60), appointmentKey:AlarmCore.key(c), specialty:cleanText(c.especialidad), doctor:cleanText(c.medico), center:cleanText(c.centro) });
         }
-        const confirmed = await request('/reminders', { clientVersion:2, revision:remoteRevision, subscription: subscription.toJSON(), reminders: items });
+        const confirmed = await request('/reminders', { clientVersion:3, revision:remoteRevision, subscription: subscription.toJSON(), reminders: items });
         remoteRevision=confirmed.revision; remoteSchedule=items;
         if (confirmed.pushExpired) throw Error('La suscripción del móvil ha caducado. Hace falta volver a vincularlo.');
-        if (current === revision) status = 'Horarios confirmados por el servicio. Usa el aviso de prueba para comprobar este móvil.';
+        if (current === revision) status = 'Resúmenes por día y centro confirmados. Los cambios posteriores se consultan al abrir la app; no generan otro aviso ese día.';
       } catch (error) { if (current === revision) status = error.message + ' Los horarios anteriores pueden seguir activos hasta confirmar el cambio.'; }
       paintStatus();
     });
@@ -265,6 +275,7 @@
   window.Alarms = {
     attach(citas) {
       appointments = citas;
+      for(const c of citas){const legacy=JSON.stringify([c.especialidad,c.fechaCorta]),current=AlarmCore.key(c);if(!saved[current]&&saved[legacy]&&citas.filter(x=>JSON.stringify([x.especialidad,x.fechaCorta])===legacy).length===1){saved[current]=saved[legacy];delete saved[legacy];}}
       appointmentsReady = true;
       const panel = document.getElementById('citasPanel');
       const summary = document.createElement('div'); summary.className = 'alarm-summary'; summary.dataset.alarmStatus = ''; summary.setAttribute('role', 'status'); panel.prepend(summary);
