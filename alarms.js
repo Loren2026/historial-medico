@@ -65,7 +65,7 @@
       const registration=await navigator.serviceWorker.getRegistration(),sub=await registration?.pushManager.getSubscription();
       let http='Sin credencial';const value=localStorage.getItem(TOKEN)||backup?.token;
       if(value&&configured()){try{http=(await fetch(config.apiUrl+'/status',{cache:'no-store',headers:{Authorization:'Bearer '+value},signal:AbortSignal.timeout(10000)})).status;}catch(_){http='Sin respuesta';}}
-      const info={version:'16-11-2026 · 24',origen:location.origin,modo:matchMedia('(display-mode: standalone)').matches?'App instalada':'Navegador',configurada:configured(),credencialLocal:!!localStorage.getItem(TOKEN),copiaDeConexion:!!backup?.token,suscripcion:!!sub,permiso:typeof Notification==='undefined'?'No disponible':Notification.permission,respuestaServicio:http,preferenciasLocales:!!localStorage.getItem(KEY),antesDeActualizar:previous||'Sin registro anterior',alAbrirLaApp:lastLoad||'Sin registro'};
+      const info={version:'16-11-2026 · 25',origen:location.origin,modo:matchMedia('(display-mode: standalone)').matches?'App instalada':'Navegador',configurada:configured(),credencialLocal:!!localStorage.getItem(TOKEN),copiaDeConexion:!!backup?.token,suscripcion:!!sub,permiso:typeof Notification==='undefined'?'No disponible':Notification.permission,respuestaServicio:http,preferenciasLocales:!!localStorage.getItem(KEY),antesDeActualizar:previous||'Sin registro anterior',alAbrirLaApp:lastLoad||'Sin registro'};
       const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font:inherit';pre.textContent=JSON.stringify(info,null,2);dialog.append(pre);
     }catch(error){paragraph(error.message);}
     button('Volver',()=>showSettings());open();
@@ -137,8 +137,8 @@
     if(reconciliation.changes.length){
       if(!window.Clinical?.approve)throw Error('No se puede mostrar la revisión del cambio. Los avisos compartidos se conservan.');
       const fmt=ms=>new Intl.DateTimeFormat('es-ES',{timeZone:'Europe/Madrid',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(ms);
-      const changes=reconciliation.changes.map(({item,cita})=>({id:item.id,before:item.startsAt,after:AlarmCore.madridDate(cita.fechaCorta),specialty:cita.especialidad,center:cita.centro,offsets:item.offsets}));
-      const text=changes.map(c=>'CITA: '+c.specialty+' · '+c.center+'\nANTES: '+fmt(c.before)+'\nDESPUÉS: '+fmt(c.after)+'\nPlazos conservados: '+c.offsets.filter(n=>n!==30&&n!==60).map(AlarmCore.label).join(', ')).join('\n\n');
+      const changes=reconciliation.changes.map(({item,cita})=>({id:item.id,before:item.startsAt,after:AlarmCore.madridDate(cita.fechaCorta),specialty:cita.especialidad,center:cita.centro,doctorBefore:item.doctor||'',doctorAfter:cita.medico||'',offsets:item.offsets}));
+      const text=changes.map(c=>'CITA: '+c.specialty+' · '+c.center+'\nANTES: '+fmt(c.before)+'\nDESPUÉS: '+fmt(c.after)+(c.doctorBefore!==c.doctorAfter?'\nMédico ANTES: '+(c.doctorBefore||'No informado')+'\nMédico DESPUÉS: '+(c.doctorAfter||'No informado'):'')+'\nPlazos conservados: '+c.offsets.filter(n=>n!==30&&n!==60).map(AlarmCore.label).join(', ')).join('\n\n');
       const accepted=await Clinical.approve('Actualizar horarios de avisos compartidos',text+'\n\nSe actualizarán los horarios del servicio para este móvil y las personas vinculadas. Cancelar conserva los horarios del servidor. Hora de Madrid.');
       if(!accepted)throw Error('Cambio de horario compartido sin aprobar. El Excel de este móvil se conserva; el servicio mantiene el horario anterior.');
       if(signature!==appointmentSignature)throw Error('El historial cambió durante la revisión. Revisa otra vez antes de guardar.');

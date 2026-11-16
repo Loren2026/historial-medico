@@ -50,6 +50,19 @@
       dayOf(i.startsAt)===dayOf(madridDate(c.fechaCorta))&&
       canonical(i.specialty)===canonical(c.especialidad)&&canonical(i.center)===canonical(c.centro)&&
       canonical(i.doctor)===canonical(c.medico),true);
+    // A previously blank doctor may now be supplied by an approved source.
+    // Check uniqueness without filtering by the new doctor, and still require review.
+    const sameGroup=(i,c)=>knownCenter(i.center)&&knownCenter(c.centro)&&
+      !!canonical(i.specialty)&&dayOf(i.startsAt)===dayOf(madridDate(c.fechaCorta))&&
+      canonical(i.specialty)===canonical(c.especialidad)&&canonical(i.center)===canonical(c.centro);
+    for(const item of pending){
+      if(done.has(item.id)||canonical(item.doctor))continue;
+      const candidates=available.filter(c=>!used.has(key(c))&&sameGroup(item,c));
+      if(candidates.length!==1||!canonical(candidates[0].medico))continue;
+      const cita=candidates[0];
+      if(pending.filter(i=>!done.has(i.id)&&sameGroup(i,cita)).length!==1)continue;
+      done.add(item.id);used.add(key(cita));matches.push({item,cita,rescheduled:true});
+    }
     if(done.size!==pending.length)fail();
     return {matches,changes:matches.filter(x=>x.rescheduled&&x.item.startsAt!==madridDate(x.cita.fechaCorta))};
   }

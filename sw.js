@@ -1,6 +1,6 @@
 // Restore JSON support - 2026-09-26
 importScripts('./binding-store.js?v=20261028-14', './family-notifications.js?v=20261116-24');
-const CACHE = 'historial-v24-sincronizacion-familiar';
+const CACHE = 'historial-v25-ficha-citas';
 const XLSX_SCRIPT = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const APP_SHELL = [
   XLSX_SCRIPT,
@@ -21,9 +21,9 @@ const APP_SHELL = [
   './icon-192.png',
   './icon-512.png',
   './alarms-config.js',
-  './alarms-core.js?v=20261116-24',
+  './alarms-core.js?v=20261116-25',
   './binding-store.js?v=20261028-14',
-  './alarms.js?v=20261116-24',
+  './alarms.js?v=20261116-25',
   './family.html',
   './family-notifications.js?v=20261116-24',
   './family-sw.js',
