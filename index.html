@@ -345,19 +345,19 @@
     border-left: 3px solid #516A99;
   }
   .cita-card {
-    position: relative; overflow: visible; margin-bottom: 0; background: #111B2F;
-    border: 1px solid #3A5077; border-left: 1px solid #3A5077; border-radius: 18px;
+    position: relative; overflow: visible; margin-bottom: 0; background: var(--cita-bg, #111B2F);
+    border: 1px solid var(--cita-border, #3A5077); border-left: 1px solid var(--cita-border, #3A5077); border-radius: 18px;
   }
   .cita-card::before {
     content: ''; position: absolute; left: -26px; top: 27px;
     width: 13px; height: 13px; border: 4px solid #0B0F19;
-    border-radius: 50%; background: #35C8F2;
+    border-radius: 50%; background: var(--cita-accent, #35C8F2);
   }
   .cita-card-header {
     display: flex; align-items: flex-start; justify-content: space-between;
     padding: 15px; cursor: pointer; gap: 10px; transition: background .2s;
   }
-  .cita-card-header:hover { background: #17243D; border-radius: 18px; }
+  .cita-card-header:hover { background: var(--cita-hover, #17243D); border-radius: 18px; }
   .cita-card-header-left { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
   .cita-time {
     font-family: 'Space Mono', monospace; font-size: 24px; line-height: 1;
@@ -425,7 +425,13 @@
   .cita-toggle { grid-column: 2; grid-row: 1; }
   .cita-nota-wrap { align-items: flex-start; }
   .cita-nota { display: block; width: 100%; min-height: 48px; height: auto; resize: vertical; overflow-wrap: anywhere; white-space: pre-wrap; line-height: 1.45; font-size: 16px; }
-  .cita-note-label { color: #C6D2E6; font-size: 12px; }
+  .cita-note-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .cita-center { grid-column: 1 / -1; display: block; min-width: 0; max-width: 100%; color: #F8FAFC; font-size: 21px; line-height: 1.25; font-weight: 650; overflow-wrap: anywhere; }
+  a.cita-center { text-decoration: underline; text-decoration-color: var(--cita-accent, #35C8F2); text-underline-offset: 4px; text-decoration-thickness: 1px; }
+  a.cita-center:hover { color: var(--cita-accent, #35C8F2); }
+  a.cita-center:focus-visible { outline: 2px solid #FFD84D; outline-offset: 4px; border-radius: 3px; }
+  .cita-center-icon { font-size: .8em; white-space: nowrap; }
+  @media (max-width: 430px) { .cita-center { font-size: 19px; } }
   .cita-detail, .modal-card, .upload-card, .summary-card { overflow-wrap: anywhere; }
   .cita-card.open .cita-detail { max-height: none; }
   .alarm-button { max-width: calc(100% - 24px); overflow-wrap: anywhere; white-space: normal; }
@@ -1423,6 +1429,7 @@ function renderCitasPendientes() {
     group.citas.push(cita);
   });
 
+  const centerColors = AppointmentCenters.palette(citas.map(c => c.centro));
   let cardIndex = 0;
   let H = '<div class="citas-title-row"><h3>🗓️ Citas Pendientes</h3><div class="line"></div></div>';
   groups.forEach(group => {
@@ -1435,10 +1442,17 @@ function renderCitasPendientes() {
     group.citas.forEach(c => {
       const i = cardIndex++;
       const hasDetail = c.tipo || c.centro || c.medico || c.motivo || c.observaciones;
-      H += '<div class="cita-card" id="cita_' + i + '">';
+      const center = AppointmentCenters.describe(c.centro, centerColors);
+      const centerStyle = '--cita-bg:' + center.background + ';--cita-hover:' + center.hover + ';--cita-border:' + center.border + ';--cita-accent:' + center.accent;
+      H += '<div class="cita-card" data-center="' + escapeHTML(center.key) + '" style="' + escapeHTML(centerStyle) + '" id="cita_' + i + '">';
       H += '<div class="cita-card-header" onclick="toggleCita(' + i + ')">';
       H += '<div class="cita-card-header-left">';
       H += '<span class="cita-time">' + escapeHTML(citaTime(c.dateObj, c.fechaCorta)) + '</span>';
+      if (center.url) {
+        H += '<a class="cita-center" href="' + escapeHTML(center.url) + '" target="_blank" rel="noopener noreferrer" aria-label="Cómo llegar a ' + escapeHTML(center.name) + ' en Google Maps">' + escapeHTML(center.name) + ' <span class="cita-center-icon" aria-hidden="true">↗</span></a>';
+      } else {
+        H += '<span class="cita-center" title="Dirección pendiente de confirmar">' + escapeHTML(center.name) + '</span>';
+      }
       H += '<div class="cita-header-row1">';
       H += '<button type="button" class="cita-specialty" data-target="' + escapeHTML(c.tabTarget) + '"';
       H += ' aria-label="Abrir la pestaña de ' + escapeHTML(c.especialidad) + '">' + escapeHTML(c.especialidad) + '</button>';
@@ -1466,6 +1480,9 @@ function renderCitasPendientes() {
   });
   const panel = document.getElementById('citasPanel');
   panel.innerHTML = H;
+  panel.querySelectorAll('a.cita-center').forEach(link => {
+    ['click', 'touchstart', 'mousedown'].forEach(eventName => link.addEventListener(eventName, event => event.stopPropagation()));
+  });
   panel.querySelectorAll('.cita-nota').forEach(input => {
     ['click','touchstart','mousedown'].forEach(eventName => input.addEventListener(eventName, event => event.stopPropagation()));
     let approvedValue = input.value;
@@ -1490,6 +1507,7 @@ function renderCitasPendientes() {
 }
 </script>
 
+<script src="appointment-centers.js?v=20261116-26"></script>
 <script src="alarms-config.js"></script>
 <script src="clinical-photos.js?v=20261107-21"></script>
 <script src="clinical-ocr.js?v=20261107-21"></script>

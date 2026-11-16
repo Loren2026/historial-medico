@@ -1,11 +1,12 @@
 // Restore JSON support - 2026-09-26
 importScripts('./binding-store.js?v=20261028-14', './family-notifications.js?v=20261116-24');
-const CACHE = 'historial-v25-ficha-citas';
+const CACHE = 'historial-v26-centros-citas';
 const XLSX_SCRIPT = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const APP_SHELL = [
   XLSX_SCRIPT,
   './',
   './index.html',
+  './appointment-centers.js?v=20261116-26',
   './clinical.js?v=20261107-21',
   './clinical-photos.js?v=20261107-21',
   './clinical-ocr.js?v=20261107-21',
