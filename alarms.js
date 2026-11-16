@@ -65,19 +65,54 @@
       const registration=await navigator.serviceWorker.getRegistration(),sub=await registration?.pushManager.getSubscription();
       let http='Sin credencial';const value=localStorage.getItem(TOKEN)||backup?.token;
       if(value&&configured()){try{http=(await fetch(config.apiUrl+'/status',{cache:'no-store',headers:{Authorization:'Bearer '+value},signal:AbortSignal.timeout(10000)})).status;}catch(_){http='Sin respuesta';}}
-      const info={version:'16-11-2026 · 25',origen:location.origin,modo:matchMedia('(display-mode: standalone)').matches?'App instalada':'Navegador',configurada:configured(),credencialLocal:!!localStorage.getItem(TOKEN),copiaDeConexion:!!backup?.token,suscripcion:!!sub,permiso:typeof Notification==='undefined'?'No disponible':Notification.permission,respuestaServicio:http,preferenciasLocales:!!localStorage.getItem(KEY),antesDeActualizar:previous||'Sin registro anterior',alAbrirLaApp:lastLoad||'Sin registro'};
+      const info={version:'16-11-2026 · 27',origen:location.origin,modo:matchMedia('(display-mode: standalone)').matches?'App instalada':'Navegador',configurada:configured(),credencialLocal:!!localStorage.getItem(TOKEN),copiaDeConexion:!!backup?.token,suscripcion:!!sub,permiso:typeof Notification==='undefined'?'No disponible':Notification.permission,respuestaServicio:http,preferenciasLocales:!!localStorage.getItem(KEY),antesDeActualizar:previous||'Sin registro anterior',alAbrirLaApp:lastLoad||'Sin registro'};
       const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font:inherit';pre.textContent=JSON.stringify(info,null,2);dialog.append(pre);
     }catch(error){paragraph(error.message);}
     button('Volver',()=>showSettings());open();
   }
   const worker = () => Promise.race([navigator.serviceWorker.ready, new Promise((_,reject) => setTimeout(() => reject(Error('No se ha podido iniciar el servicio del navegador. Recarga con conexión.')),10000))]);
   const persist = () => { localStorage.setItem(KEY, JSON.stringify(saved)); };
+  // Cosmetic acknowledgements for this owner's browser. No credentials or clinical data.
+  const DISMISSED_MESSAGES = 'historial_owner_mensajes_leidos_v1';
+  const dismissibleMessages = new Map([
+    ['Resúmenes por día y centro confirmados. Los cambios posteriores se consultan al abrir la app; no generan otro aviso ese día.', 'daily-summary-confirmed:1']
+  ]);
+  function readDismissedMessages() {
+    try {
+      const values = JSON.parse(localStorage.getItem(DISMISSED_MESSAGES) || '[]');
+      return new Set(Array.isArray(values) ? values.filter(v => typeof v === 'string') : []);
+    } catch (_) { return new Set(); }
+  }
   function paintStatus() {
     document.querySelectorAll('[data-alarm-status]').forEach(el => {
-      el.textContent = status;
-      el.hidden = el.classList.contains('alarm-summary') && status.startsWith('Horarios confirmados por el servicio.');
+      if (!el.classList.contains('alarm-summary')) { el.textContent = status; return; }
+      const id = dismissibleMessages.get(status), dismissed = readDismissedMessages();
+      el.replaceChildren();
+      const text = document.createElement('span'); text.textContent = status; el.append(text);
+      el.hidden = (id && dismissed.has(id)) || status.startsWith('Horarios confirmados por el servicio.');
+      if (!id) return;
+      const close = document.createElement('button');
+      close.type = 'button'; close.className = 'alarm-dismiss'; close.textContent = '×';
+      close.setAttribute('aria-label', 'Cerrar este mensaje informativo');
+      close.title = 'No volver a mostrar este mensaje';
+      close.addEventListener('click', () => {
+        try {
+          const current = readDismissedMessages(); current.add(id);
+          localStorage.setItem(DISMISSED_MESSAGES, JSON.stringify([...current]));
+          if (!readDismissedMessages().has(id)) throw Error();
+        } catch (_) {
+          mostrarToast('No se pudo guardar el cierre. El mensaje permanece visible.'); return;
+        }
+        const hadFocus = document.activeElement === close;
+        paintStatus();
+        if (hadFocus) document.querySelector('#citasPanel .cita-specialty')?.focus({preventScroll:true});
+      });
+      el.append(close);
     });
   }
+  window.addEventListener('storage', event => {
+    if (event.key === DISMISSED_MESSAGES || event.key === null) paintStatus();
+  });
   function shell(title) {
     dialog.replaceChildren();
     const close = document.createElement('button'); close.textContent = '✕'; close.className = 'alarm-close'; close.setAttribute('aria-label', 'Cerrar avisos'); close.onclick = () => dialog.close(); dialog.append(close);

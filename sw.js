@@ -1,11 +1,12 @@
 // Restore JSON support - 2026-09-26
 importScripts('./binding-store.js?v=20261028-14', './family-notifications.js?v=20261116-24');
-const CACHE = 'historial-v26-centros-citas';
+const CACHE = 'historial-v28-conservar-vista';
 const XLSX_SCRIPT = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const APP_SHELL = [
   XLSX_SCRIPT,
   './',
   './index.html',
+  './navigation-state.js?v=20261116-28',
   './appointment-centers.js?v=20261116-26',
   './clinical.js?v=20261107-21',
   './clinical-photos.js?v=20261107-21',
@@ -24,14 +25,14 @@ const APP_SHELL = [
   './alarms-config.js',
   './alarms-core.js?v=20261116-25',
   './binding-store.js?v=20261028-14',
-  './alarms.js?v=20261116-25',
+  './alarms.js?v=20261116-27',
   './family.html',
   './family-notifications.js?v=20261116-24',
   './family-sw.js',
   './family-manifest.json',
   './family.js?v=20261116-24',
   './family.css?v=20261116-24',
-  './alarms.css?v=20261030-17'
+  './alarms.css?v=20261116-27'
 ];
 
 async function refreshAppFiles() {

@@ -12,9 +12,10 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="alarms.css?v=20261030-17">
+<link rel="stylesheet" href="alarms.css?v=20261116-27">
 <link rel="stylesheet" href="clinical.css?v=20261107-21">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="navigation-state.js?v=20261116-28"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -537,7 +538,7 @@ function guardarExcel(buffer) {
   return abrirDB().then(db => new Promise((resolve, reject) => {
     const tx = db.transaction(DB_STORE, 'readwrite');
     tx.objectStore(DB_STORE).put(buffer, DB_KEY);
-    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.oncomplete = () => { db.close(); NavigationState.setWorkbook(buffer).then(resolve); };
     tx.onabort = tx.onerror = () => { db.close(); reject(new Error('No se pudo guardar el Excel en este dispositivo.')); };
   }));
 }
@@ -545,9 +546,10 @@ function cargarExcelGuardado() {
   abrirDB().then(db => {
     const tx = db.transaction(DB_STORE, 'readonly');
     const req = tx.objectStore(DB_STORE).get(DB_KEY);
-    req.onsuccess = e => {
+    req.onsuccess = async e => {
       try {
       if (e.target.result) {
+        await NavigationState.setWorkbook(e.target.result);
         const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
         parseWorkbook(wb);
         renderDashboard();
@@ -696,6 +698,7 @@ function escapeHTML(str) {
 }
 
 function renderDashboard() {
+  const previousView = NavigationState.beforeRender();
   document.getElementById('uploadZone').style.display = 'none';
   document.getElementById('mainContent').classList.add('active');
   REF_MAP.length = 0; REF_LOOKUP.clear(); GLOBAL_DOCS.length = 0;
@@ -836,6 +839,7 @@ function renderDashboard() {
 
   renderCitasPendientes();
   Clinical.render();
+  NavigationState.restore(previousView);
 }
 
 // ===== MEDICACIÓN =====
@@ -1189,6 +1193,7 @@ let actualizacionEnCurso = false;
 async function actualizarApp() {
   if (actualizacionEnCurso) return;
   if (MED_IMPORT_BUSY || Clinical.editorOpen()) { mostrarToast('Termina o cancela la edición antes de actualizar.'); return; }
+  NavigationState.capture();
   actualizacionEnCurso = true;
   document.activeElement?.blur();
   closeMenu();
@@ -1246,7 +1251,7 @@ function showView(v) {
   document.getElementById('view_' + v).classList.add('active');
   window.scrollTo(0, 0);
 }
-function goInicio() { NAV_HIST.length = 1; showView('inicio'); closeMenu(); }
+function goInicio() { NAV_HIST.length = 1; showView('inicio'); closeMenu(); NavigationState.navigated(); }
 
 function go(v) {
   if (v === 'medicacion') { alert('La sección Medicación se activa en la próxima fase.'); closeMenu(); return; }
@@ -1260,6 +1265,7 @@ function activateTab(target, skipHist) {
   if (target === 'buscador') buscarGlobal(document.getElementById('globalSearch') ? document.getElementById('globalSearch').value : '');
   if (!skipHist) pushHist({ view: 'secciones', panel: target });
   closeMenu();
+  NavigationState.navigated();
 }
 
 // Botón VOLVER: pulsación = estado anterior; mantener 2s = inicio
@@ -1269,10 +1275,11 @@ function volverAtras() {
   const prev = NAV_HIST[NAV_HIST.length - 1];
   if (prev.view === 'inicio') { showView('inicio'); closeMenu(); }
   else { activateTab(prev.panel, true); }
+  NavigationState.navigated();
 }
 function irAlInicioTotal() {
   NAV_HIST.length = 1;                   // reset historial
-  showView('inicio'); closeMenu();
+  showView('inicio'); closeMenu(); NavigationState.navigated();
 }
 (function initBackBtn() {
   const btn = document.getElementById('btnBack');
@@ -1517,7 +1524,7 @@ function renderCitasPendientes() {
 <script src="alarms-core.js?v=20261116-25"></script>
 <script src="binding-store.js?v=20261028-14"></script>
 <link rel="stylesheet" href="family.css?v=20261116-24">
-<script src="alarms.js?v=20261116-25"></script>
+<script src="alarms.js?v=20261116-27"></script>
 <script src="family.js?v=20261116-24"></script>
 <script>
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.protocol === 'http:')) {
