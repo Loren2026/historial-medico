@@ -2,7 +2,7 @@
   'use strict';
   const recipientMode=document.body.dataset.family==='recipient',config=window.ALARMS_CONFIG||{};
   const CREDENTIAL='historial_family_credential_v1',INVITE='historial_family_invite_v1';
-  let credential=null,root,notice;
+  let credential=null,root,notice,agendaTimer=null;
   function el(tag,text,parent=root,cls=''){const n=document.createElement(tag);if(text)n.textContent=text;if(cls)n.className=cls;parent.append(n);return n;}
   function button(text,fn,parent=root,cls=''){const b=el('button',text,parent,cls);b.type='button';b.onclick=async()=>{b.disabled=true;try{await fn();}catch(e){notice.textContent=e.message;}finally{b.disabled=false;}};return b;}
   const format=ms=>new Intl.DateTimeFormat('es-ES',{timeZone:'Europe/Madrid',dateStyle:'short',timeStyle:'short'}).format(ms);
@@ -68,22 +68,27 @@
     let existing=await reg.pushManager.getSubscription();if(renew&&existing){await existing.unsubscribe();existing=null;}return existing||reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:Uint8Array.from(raw,c=>c.charCodeAt(0))});
   }
   async function recipientPage(){
+    if(agendaTimer){clearInterval(agendaTimer);agendaTimer=null;}
     root=document.getElementById('familyMain');root.replaceChildren();el('h1','Avisos familiares');message();
     if(credential?.token){
       let subscriptionExpired=false;
       el('p','Vinculación de '+credential.name);el('p','Recibirás los resúmenes de las citas de Loren, con horas, especialistas y centro. No tienes que cargar ningún historial.');
       try{const s=await api('/family/self');subscriptionExpired=!!s.pushExpired;notice.textContent=s.pushExpired?'Necesitas renovar las notificaciones.':'Vinculación activa. Comprueba la recepción con un aviso de prueba.';}catch(e){notice.textContent=e.message;}
       const agendaBox=el('section','',root,'family-agenda');
+      let agendaRequest=0;
       async function refreshAgenda(){
+        const request=++agendaRequest;
         agendaBox.replaceChildren();el('h2','Citas compartidas de Loren',agendaBox);
-        try{const data=await api('/family/agenda');if(!data.enabled){el('p','Loren tiene que actualizar su app para sincronizar los resúmenes.',agendaBox);return;}
+        try{const data=await api('/family/agenda');if(request!==agendaRequest)return;if(!data.enabled){el('p','Loren tiene que actualizar su app para sincronizar los resúmenes.',agendaBox);return;}
           if(!data.groups.length)el('p','No hay citas futuras compartidas.',agendaBox);
           for(const group of data.groups){const card=el('section','',agendaBox,'family-card');el('h3',group.date.split('-').reverse().join('/')+' · '+group.center,card);
             for(const a of group.appointments)el('p',new Intl.DateTimeFormat('es-ES',{timeZone:'Europe/Madrid',hour:'2-digit',minute:'2-digit'}).format(a.startsAt)+' · '+(a.specialty||'Especialista no informado')+(a.doctor?' · '+a.doctor:''),card);}
+          if(data.updatedAt)el('p','Última sincronización de Loren: '+format(data.updatedAt)+' (Madrid).',agendaBox,'family-hint');
           el('p','Hora de Madrid. Se muestra la última información sincronizada por Loren. Los cambios posteriores a un aviso se consultan aquí.',agendaBox,'family-hint');
         }catch(e){el('p',e.message,agendaBox);}
       }
       await refreshAgenda();button('Actualizar citas',refreshAgenda);
+      agendaTimer=setInterval(()=>{if(!document.hidden&&credential?.token)refreshAgenda();},30000);
       button('Probar aviso',async()=>{await api('/family/test',{});notice.textContent='Prueba enviada. Comprueba la notificación y el sonido.';},root,'primary');
       button('Renovar notificaciones',async()=>{const sub=await pushSubscription(subscriptionExpired);const r=await api('/family/self',{subscription:sub.toJSON()});notice.textContent=r.pushExpired?'La suscripción sigue caducada. Solicita una nueva invitación y revisa el permiso de notificaciones.':'Suscripción comprobada. Pulsa Probar aviso.';});
       button('Dejar de recibir avisos',async()=>{if(!confirm('¿Dejar de recibir los avisos de tu familiar en este móvil?'))return;await api('/family/leave',{});await saveCredential(null);await recipientPage();notice.textContent='Vinculación retirada.';});

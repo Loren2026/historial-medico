@@ -1,6 +1,6 @@
 // Restore JSON support - 2026-09-26
-importScripts('./binding-store.js?v=20261028-14');
-const CACHE = 'historial-v23-resumenes-personas-especialidades';
+importScripts('./binding-store.js?v=20261028-14', './family-notifications.js?v=20261116-24');
+const CACHE = 'historial-v24-sincronizacion-familiar';
 const XLSX_SCRIPT = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const APP_SHELL = [
   XLSX_SCRIPT,
@@ -21,14 +21,15 @@ const APP_SHELL = [
   './icon-192.png',
   './icon-512.png',
   './alarms-config.js',
-  './alarms-core.js?v=20261115-23',
+  './alarms-core.js?v=20261116-24',
   './binding-store.js?v=20261028-14',
-  './alarms.js?v=20261115-23',
+  './alarms.js?v=20261116-24',
   './family.html',
+  './family-notifications.js?v=20261116-24',
   './family-sw.js',
   './family-manifest.json',
-  './family.js?v=20261115-23',
-  './family.css?v=20261115-23',
+  './family.js?v=20261116-24',
+  './family.css?v=20261116-24',
   './alarms.css?v=20261030-17'
 ];
 
@@ -94,7 +95,7 @@ self.addEventListener('fetch', event => {
   );
 });
 
-// Only generic appointment information is included in push messages.
+// Push contains the appointment details approved for owner/family sharing.
 self.addEventListener('push', event => {
   let message = {};
   try { message = event.data ? event.data.json() : {}; } catch (_) {}
@@ -113,12 +114,15 @@ self.addEventListener('push', event => {
     })()); return;
   }
   const body = typeof message.body === 'string' ? message.body.slice(0, message.daily ? 3000 : 200) : 'Abre la app para consultar tus citas.';
-  event.waitUntil(self.registration.showNotification(message.test ? 'Prueba de avisos' : message.daily && typeof message.title==='string' ? message.title.slice(0,120) : 'Cita médica', {
+  const title=message.test ? 'Prueba de avisos' : message.daily && typeof message.title==='string' ? message.title.slice(0,120) : 'Cita médica';
+  const options={
     body, icon: './icon-192.png', badge: './icon-192.png',
-    tag: typeof message.tag === 'string' ? message.tag.slice(0, 100) : 'cita-medica',
-    renotify: false, silent: false, vibrate: [250, 120, 250],
-    data: { url: message.family === true ? new URL('./family.html', self.registration.scope).href : self.registration.scope }
-  }));
+    tag: typeof message.tag === 'string' ? message.tag.slice(0,100) : 'cita-medica',
+    renotify:false,silent:false,vibrate:[250,120,250],
+    data:{url:message.family===true?new URL('./family.html',self.registration.scope).href:self.registration.scope}
+  };
+  event.waitUntil(message.family===true ? self.FamilyNotifications.show(message,title,options) : self.registration.showNotification(title,options));
+
 });
 self.addEventListener('notificationclick', event => {
   event.notification.close();

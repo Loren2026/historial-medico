@@ -3,7 +3,7 @@
   const KEY = 'historial_alarmas_v1', TOKEN = 'historial_alarmas_dispositivo_v1';
   const config = window.ALARMS_CONFIG || {};
   let appointments = [], appointmentsReady = false, queue = Promise.resolve(), revision = 0, status = 'Sin conectar', storageOK = true;
-  let remoteLoaded = false, remoteRevision = null, remoteSchedule = [], remoteLoading = null;
+  let remoteLoaded = false, remoteRevision = null, remoteSchedule = [], remoteLoading = null, appointmentSignature = '', reviewedSchedule = null;
   let saved;
   try {
     saved = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -65,7 +65,7 @@
       const registration=await navigator.serviceWorker.getRegistration(),sub=await registration?.pushManager.getSubscription();
       let http='Sin credencial';const value=localStorage.getItem(TOKEN)||backup?.token;
       if(value&&configured()){try{http=(await fetch(config.apiUrl+'/status',{cache:'no-store',headers:{Authorization:'Bearer '+value},signal:AbortSignal.timeout(10000)})).status;}catch(_){http='Sin respuesta';}}
-      const info={version:'15-11-2026 · 23',origen:location.origin,modo:matchMedia('(display-mode: standalone)').matches?'App instalada':'Navegador',configurada:configured(),credencialLocal:!!localStorage.getItem(TOKEN),copiaDeConexion:!!backup?.token,suscripcion:!!sub,permiso:typeof Notification==='undefined'?'No disponible':Notification.permission,respuestaServicio:http,preferenciasLocales:!!localStorage.getItem(KEY),antesDeActualizar:previous||'Sin registro anterior',alAbrirLaApp:lastLoad||'Sin registro'};
+      const info={version:'16-11-2026 · 24',origen:location.origin,modo:matchMedia('(display-mode: standalone)').matches?'App instalada':'Navegador',configurada:configured(),credencialLocal:!!localStorage.getItem(TOKEN),copiaDeConexion:!!backup?.token,suscripcion:!!sub,permiso:typeof Notification==='undefined'?'No disponible':Notification.permission,respuestaServicio:http,preferenciasLocales:!!localStorage.getItem(KEY),antesDeActualizar:previous||'Sin registro anterior',alAbrirLaApp:lastLoad||'Sin registro'};
       const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font:inherit';pre.textContent=JSON.stringify(info,null,2);dialog.append(pre);
     }catch(error){paragraph(error.message);}
     button('Volver',()=>showSettings());open();
@@ -99,7 +99,7 @@
       }
       if(response.status===404&&path==='/recover')throw Error('Esta suscripción no coincide con la vinculada. Abre Estado de la conexión para comprobarlo; no generes otro código todavía.');
       if(response.status===429)throw Error('Espera un minuto antes de reintentar la recuperación.');
-      if (response.status === 409) throw Error('La programación cambió o la app necesita actualizarse. Cierra y vuelve a abrir la app para recuperar los horarios antes de guardar.');
+      if (response.status === 409) { remoteLoaded=false; throw Error('La programación cambió o la app necesita actualizarse. Cierra y vuelve a abrir la app para recuperar los horarios antes de guardar.'); }
       throw Error(response.status === 401 ? 'No se ha podido validar la conexión de este móvil. Tus horarios se conservan en el servidor.' : 'No se ha podido confirmar el cambio. Reinténtalo con conexión.');
     }
     return response.json();
@@ -132,13 +132,25 @@
     if (!appointmentsReady) throw Error('Carga el historial vigente antes de sincronizar los avisos.');
     const data = await request('/status');
     if (data.apiVersion !== 2 || !Number.isSafeInteger(data.revision) || !Array.isArray(data.reminders)) throw Error('La actualización del servicio sigue en curso. Los horarios anteriores se conservan.');
+    const signature=appointmentSignature;
+    const reconciliation=AlarmCore.reconcile(appointments,data.reminders);
+    if(reconciliation.changes.length){
+      if(!window.Clinical?.approve)throw Error('No se puede mostrar la revisión del cambio. Los avisos compartidos se conservan.');
+      const fmt=ms=>new Intl.DateTimeFormat('es-ES',{timeZone:'Europe/Madrid',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(ms);
+      const changes=reconciliation.changes.map(({item,cita})=>({id:item.id,before:item.startsAt,after:AlarmCore.madridDate(cita.fechaCorta),specialty:cita.especialidad,center:cita.centro,offsets:item.offsets}));
+      const text=changes.map(c=>'CITA: '+c.specialty+' · '+c.center+'\nANTES: '+fmt(c.before)+'\nDESPUÉS: '+fmt(c.after)+'\nPlazos conservados: '+c.offsets.filter(n=>n!==30&&n!==60).map(AlarmCore.label).join(', ')).join('\n\n');
+      const accepted=await Clinical.approve('Actualizar horarios de avisos compartidos',text+'\n\nSe actualizarán los horarios del servicio para este móvil y las personas vinculadas. Cancelar conserva los horarios del servidor. Hora de Madrid.');
+      if(!accepted)throw Error('Cambio de horario compartido sin aprobar. El Excel de este móvil se conserva; el servicio mantiene el horario anterior.');
+      if(signature!==appointmentSignature)throw Error('El historial cambió durante la revisión. Revisa otra vez antes de guardar.');
+      reviewedSchedule={id:crypto.randomUUID(),at:new Date().toISOString(),revision:data.revision,signature,changes,status:'aprobado_pendiente'};
+      const history=JSON.parse(localStorage.getItem(KEY+'_aprobaciones')||'[]');
+      if(!Array.isArray(history))throw Error('No se puede leer el historial de aprobaciones de avisos.');
+      localStorage.setItem(KEY+'_aprobaciones',JSON.stringify(history.concat(reviewedSchedule)));
+    }
+    if(signature!==appointmentSignature)throw Error('El historial cambió durante la sincronización. Reintenta con la versión actual.');
     const next = {}, matches = new Set();
-    for (const item of data.reminders) {
-      if (item.startsAt <= Date.now()) continue;
-      const exact=appointments.filter(c=>item.appointmentKey&&AlarmCore.key(c)===item.appointmentKey);
-      const candidates = exact.length===1?exact:appointments.filter(c => AlarmCore.madridDate(c.fechaCorta) === item.startsAt && (!item.specialty||c.especialidad===item.specialty));
-      if (candidates.length !== 1 || matches.has(AlarmCore.key(candidates[0]))) throw Error('Hay citas programadas que no coinciden de forma única con el historial cargado. Carga el Excel vigente; se conservan los avisos del servidor.');
-      const k=AlarmCore.key(candidates[0]); matches.add(k);
+    for(const {item,cita} of reconciliation.matches){
+      const k=AlarmCore.key(cita);matches.add(k);
       next[k]={id:item.id,offsets:AlarmCore.offsets(item.offsets).filter(n=>n!==30&&n!==60)};
     }
     for (const c of appointments) {
@@ -255,9 +267,11 @@
       try {
         if (Notification.permission !== 'granted') throw Error('Notificaciones bloqueadas: revisa el permiso del móvil.');
         await loadRemote();
+        if(current!==revision)return;
         const registration = await worker(), subscription = await registration.pushManager.getSubscription();
+        if(current!==revision)return;
         if (!subscription) throw Error('No se encuentra la suscripción del móvil. Los horarios se conservan; revisa el permiso de notificaciones.');
-        if (remoteSchedule.some(item => item.startsAt>Date.now() && !appointments.some(c => AlarmCore.madridDate(c.fechaCorta)===item.startsAt))) throw Error('El historial cargado no contiene todas las citas programadas. Se conservan los avisos; revisa el Excel antes de cambiarlos.');
+        if (remoteSchedule.some(item => item.startsAt>Date.now() && !appointments.some(c => saved[AlarmCore.key(c)]?.id===item.id))) throw Error('El historial cargado no contiene todas las citas programadas. Se conservan los avisos; revisa el Excel antes de cambiarlos.');
         const items = [];
         for (const c of appointments) {
           const pref = saved[AlarmCore.key(c)], startsAt = AlarmCore.madridDate(c.fechaCorta);
@@ -265,8 +279,16 @@
         }
         const confirmed = await request('/reminders', { clientVersion:3, revision:remoteRevision, subscription: subscription.toJSON(), reminders: items });
         remoteRevision=confirmed.revision; remoteSchedule=items;
+        let auditWarning='';
+        if(reviewedSchedule&&reviewedSchedule.signature===appointmentSignature){
+          try{
+            const history=JSON.parse(localStorage.getItem(KEY+'_aprobaciones')||'[]');
+            localStorage.setItem(KEY+'_aprobaciones',JSON.stringify(history.map(r=>r.id===reviewedSchedule.id?{...r,status:'aplicado',confirmedRevision:confirmed.revision,confirmedAt:new Date().toISOString()}:r)));
+            reviewedSchedule=null;
+          }catch(_){auditWarning=' El servicio confirmó el cambio, pero no se pudo completar la copia local de la aprobación.';}
+        }
         if (confirmed.pushExpired) throw Error('La suscripción del móvil ha caducado. Hace falta volver a vincularlo.');
-        if (current === revision) status = 'Resúmenes por día y centro confirmados. Los cambios posteriores se consultan al abrir la app; no generan otro aviso ese día.';
+        if (current === revision) status = 'Resúmenes por día y centro confirmados. Los cambios posteriores se consultan al abrir la app; no generan otro aviso ese día.'+auditWarning;
       } catch (error) { if (current === revision) status = error.message + ' Los horarios anteriores pueden seguir activos hasta confirmar el cambio.'; }
       paintStatus();
     });
@@ -274,7 +296,9 @@
   }
   window.Alarms = {
     attach(citas) {
-      appointments = citas;
+      const signature=JSON.stringify(citas.map(AlarmCore.key));
+      if(signature!==appointmentSignature)remoteLoaded=false;
+      appointmentSignature=signature;appointments = citas;
       for(const c of citas){const legacy=JSON.stringify([c.especialidad,c.fechaCorta]),current=AlarmCore.key(c);if(!saved[current]&&saved[legacy]&&citas.filter(x=>JSON.stringify([x.especialidad,x.fechaCorta])===legacy).length===1){saved[current]=saved[legacy];delete saved[legacy];}}
       appointmentsReady = true;
       const panel = document.getElementById('citasPanel');
