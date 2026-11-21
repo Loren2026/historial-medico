@@ -1,6 +1,6 @@
 // Restore JSON support - 2026-09-26
 importScripts('./binding-store.js?v=20261028-14', './family-notifications.js?v=20261116-24');
-const CACHE = 'historial-v28-conservar-vista';
+const CACHE = 'historial-v29-documentos';
 const XLSX_SCRIPT = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const APP_SHELL = [
   XLSX_SCRIPT,

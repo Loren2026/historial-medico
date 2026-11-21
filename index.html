@@ -460,6 +460,18 @@
     .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
+  .document-link { border:0; background:transparent; cursor:pointer; color:#7dd3fc;
+    padding:6px 0; min-height:44px; font:inherit; font-weight:600; text-decoration:underline; text-align:left; }
+  .document-link:focus-visible { outline:2px solid #ffdf74; outline-offset:3px; }
+  #openDocumentDialog { color:var(--text); background:var(--surface); border:1px solid #647da5;
+    border-radius:16px; width:min(420px,calc(100% - 32px)); padding:20px; }
+  #openDocumentDialog::backdrop { background:rgba(0,0,0,.7); }
+  #openDocumentDialog h2 { font-size:1.25rem; }
+  #openDocumentLabel { margin:12px 0 20px; overflow-wrap:anywhere; }
+  .document-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px; }
+  .document-actions button, .document-actions a { padding:9px 13px; min-height:44px; border-radius:8px;
+    border:1px solid #8197b8; background:#253653; color:#fff; font:inherit; text-decoration:none; cursor:pointer; }
+  .document-actions a { background:#ffdf74; color:#10131b; }
 </style>
 </head>
 <body>
@@ -508,6 +520,15 @@
     <p id="modalBody"></p>
   </div>
 </div>
+
+<dialog id="openDocumentDialog" aria-labelledby="openDocumentTitle" aria-describedby="openDocumentLabel">
+  <h2 id="openDocumentTitle">¿Deseas abrir el documento?</h2>
+  <p id="openDocumentLabel"></p>
+  <form method="dialog" class="document-actions">
+    <button type="submit" value="cancelar" autofocus>Cancelar</button>
+    <a id="acceptDocument" target="_blank" rel="noopener noreferrer">Aceptar</a>
+  </form>
+</dialog>
 
 <script>
 const DATA = { specialties: [], analytics: [], poliza: '', sanitas: null, medicacion: [] };
@@ -629,6 +650,48 @@ function openModal(title, text) {
 }
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
 
+const DOCUMENT_COLUMNS = ['Documento', 'Ficha de contacto'];
+const DRIVE_DOCUMENT = /^https:\/\/drive\.google\.com\/file\/d\/[-\w]+\/view$/;
+
+function addDocumentLinks(record, sheet, columns, rowIndex) {
+  const origin = XLSX.utils.decode_range(sheet['!ref']).s;
+  const links = new Map();
+  for (const heading of DOCUMENT_COLUMNS) {
+    const column = columns.indexOf(heading);
+    if (column < 0) continue;
+    const address = XLSX.utils.encode_cell({ r: origin.r + rowIndex, c: origin.c + column });
+    const target = sheet[address]?.l?.Target;
+    const label = fmt(record[heading]).trim();
+    if (label && typeof target === 'string' && DRIVE_DOCUMENT.test(target)) links.set(heading, {target, label});
+  }
+  if (links.size) Object.defineProperty(record, 'documentLinks', {value: links});
+}
+
+function documentButton(link, heading) {
+  const label = escapeHTML(link.label);
+  const buttonText = heading === 'Ficha de contacto' ? 'Abrir ficha' : label;
+  return '<button type="button" class="document-link" data-document-url="' + escapeHTML(link.target)
+    + '" aria-label="' + label + '">' + buttonText + '</button>';
+}
+
+const documentDialog = document.getElementById('openDocumentDialog');
+const acceptDocument = document.getElementById('acceptDocument');
+let documentTrigger;
+document.getElementById('panelsContainer').addEventListener('click', event => {
+  const button = event.target.closest('[data-document-url]');
+  if (!button || documentDialog.open || !DRIVE_DOCUMENT.test(button.dataset.documentUrl || '')) return;
+  documentTrigger = button;
+  document.getElementById('openDocumentLabel').textContent = button.getAttribute('aria-label');
+  acceptDocument.href = button.dataset.documentUrl;
+  documentDialog.showModal();
+});
+acceptDocument.addEventListener('click', () => documentDialog.close('aceptar'));
+documentDialog.addEventListener('close', () => {
+  acceptDocument.removeAttribute('href');
+  documentTrigger?.focus();
+  documentTrigger = undefined;
+});
+
 function parseWorkbook(wb) {
   Clinical.load(wb);
   DATA.specialties = []; DATA.analytics = []; DATA.poliza = ''; DATA.sanitas = null; DATA.medicacion = [];
@@ -667,6 +730,7 @@ function parseWorkbook(wb) {
       for (let i = 2; i < json.length; i++) {
         if (!json[i][0]) continue;
         const r = {}; h.forEach((k, idx) => { r[k] = json[i][idx] || ''; });
+        addDocumentLinks(r, ws, h, i);
         recs.push(r);
       }
       if (recs.length > 0) DATA.specialties.push({ name, records: recs });
@@ -757,16 +821,25 @@ function renderDashboard() {
   DATA.specialties.forEach(s => {
     const id = 'spec_' + s.name.replace(/\s/g, '_');
     const hdrs = Object.keys(s.records[0]);
+    const contactColumn = hdrs.indexOf('Ficha de contacto');
+    if (contactColumn !== -1 && hdrs.includes('Centro')) {
+      const [heading] = hdrs.splice(contactColumn, 1);
+      hdrs.splice(hdrs.indexOf('Centro') + 1, 0, heading);
+    }
     const rowsDesc = ordenarPorFechaDesc(s.records, 'Fecha');
     H += '<div class="panel" id="panel_' + id + '"><div class="table-container">';
-    H += '<div class="table-header"><h3>' + escapeHTML(s.name) + '</h3><span class="badge badge-blue">' + s.records.length + ' registro' + (s.records.length !== 1 ? 's' : '') + '</span></div>';
+    H += '<div class="table-header"><h3>' + escapeHTML(s.name) + '</h3><span class="badge badge-blue">' + s.records.length + ' registro' + (s.records.length !== 1 ? 's' : '') + '</span>';
+    H += '</div>';
     H += '<div class="table-scroll"><table><thead><tr>';
     hdrs.forEach(h => { H += '<th>' + escapeHTML(h) + '</th>'; });
     H += '</tr></thead><tbody>';
     rowsDesc.forEach(r => {
       const ref = registrarRef(r, 'panel_' + id);
       H += '<tr id="rowref_' + ref + '">';
-      hdrs.forEach(h => { H += '<td>' + cellHTML(r[h], h) + '</td>'; });
+      hdrs.forEach(h => {
+        const link = r.documentLinks?.get(h);
+        H += '<td>' + (link ? documentButton(link, h) : cellHTML(r[h], h)) + '</td>';
+      });
       H += '</tr>';
     });
     H += '</tbody></table></div></div></div>';
